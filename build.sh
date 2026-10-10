@@ -3,10 +3,13 @@
 #
 #   sh build.sh [OUT]                    fetch pd-books at pd-books.pin, build, check, write OUT (default dist)
 #   PD_BOOKS=/path sh build.sh [OUT]     use a local pd-books checkout (its HEAD must equal the pin)
-#   OFFLINE=1 ...                        skip external link requests (development only; says so)
+#   OFFLINE=1 ...                        skip external link and npm requests (development only; says so)
+#   CHROMIUM=/path/to/chrome ...         also run the browser check (math typeset, 3D graph counts); the
+#                                        rehearsal before any deploy sets it, and a build without it says so
 #
 # Order: pd-books' own export check (inside site.py) -> build into a staging dir -> the oracle with its
-# planted controls (34, docs/BLUEPRINT.md) -> links -> outward -> graph. OUT is replaced only when every check is green.
+# planted controls (34, docs/BLUEPRINT.md) -> links -> outward -> graph -> vendored libraries -> the browser (with
+# CHROMIUM). OUT is replaced only when every check that ran is green.
 set -eu
 cd "$(dirname "$0")"
 OUT=${1:-dist}
@@ -33,7 +36,12 @@ python3 tools/oracle.py "$SRC/export" "$STAGE" --control \
 python3 tools/linkcheck.py "$STAGE" --control ${OFFLINE:+--offline}
 python3 tools/outward.py "$SRC/export" "$STAGE" --control
 python3 tools/graphcheck.py "$SRC/export" "$STAGE" --control
+python3 tools/vendorcheck.py "$STAGE" --control ${OFFLINE:+--offline}
+if [ -n "${CHROMIUM:-}" ]; then
+  python3 tools/browsercheck.py "$SRC/export" "$STAGE" --chromium "$CHROMIUM" --control --ceiling build/math-ceiling.json
+fi
 
 rm -rf "$OUT"
 mv "$STAGE" "$OUT"
-echo "SITE GREEN: $OUT from pd-books $PIN${OFFLINE:+ (OFFLINE: external links NOT requested)}"
+if [ -n "${CHROMIUM:-}" ]; then BROWSER=" (browser checked)"; else BROWSER=" (browser check NOT run: set CHROMIUM)"; fi
+echo "SITE GREEN: $OUT from pd-books $PIN${OFFLINE:+ (OFFLINE: external links and npm NOT requested)}$BROWSER"

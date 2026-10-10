@@ -76,8 +76,18 @@ def load(export, pd_books_check):
     return index, books, graph
 
 
-def page(title, body, depth, desc=""):
+MATH_CSS = ["vendor/katex/katex.min.css"]
+MATH_JS = ["vendor/katex/katex.min.js", "vendor/katex/contrib/auto-render.min.js", "site.js"]
+
+
+def page(title, body, depth, desc="", math=None, scripts=()):
+    """math: None for a page without math, else the book's macros (a dict) for KaTeX."""
     up = "../" * depth
+    css = "".join(f'\n<link rel="stylesheet" href="{up}{c}">' for c in (MATH_CSS if math is not None else []))
+    js = "".join(f'\n<script src="{up}{j}"></script>' for j in (MATH_JS if math is not None else []) + list(scripts))
+    main_attrs = f" data-macros=\"{e(json.dumps(math, ensure_ascii=False, sort_keys=True))}\"" if math else ""
+    report = ('\n<p class="n">Math: <output id="math-report">not typeset (scripts are off)</output></p>'
+              if math is not None else "")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -85,16 +95,17 @@ def page(title, body, depth, desc=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
-<link rel="stylesheet" href="{up}site.css">
+<link rel="stylesheet" href="{up}site.css">{css}
 </head>
 <body>
 <header class="top"><a class="brand" href="{up}index.html">Public-domain books</a>
 <nav><a href="{up}graph/index.html">Concept graph</a> <a href="{up}about/index.html">About</a></nav></header>
-<main>
+<main{main_attrs}>
 {body}
 </main>
 <footer class="foot"><p>Book data from <a href="{PD_BOOKS}">pd-books</a> (CC0). Lessons that use these books:
-<a href="{LEARN}">learn.cpuchip.net</a>. Site code MIT.</p></footer>
+<a href="{LEARN}">learn.cpuchip.net</a>. Site code MIT; the libraries it uses are listed in
+<a href="{up}vendor/THIRD-PARTY-NOTICES.txt">their notices</a>.</p>{report}</footer>{js}
 </body>
 </html>
 """
@@ -287,7 +298,7 @@ def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     loose_sets = "".join(render_set(x, [p for p in d["problems"] if p.get("set") == x["id"]])
                          for x in d["exercise_sets"] if x["id"] not in listed_s)
     # raw.githubusercontent, not a /blob/ page: GitHub's blob view 503s/429s unauthenticated checkers
-    # (measured from lepton 2026-10-10, every repo), so the link check could never confirm a blob link.
+    # (measured from the build box 2026-10-10, every repo), so the link check could never confirm a blob link.
     data_url = f"https://raw.githubusercontent.com/cpuchip/pd-books/{pin}/export/{index_entry['file']}"
     body = f"""<h1>{e(b['title'])}</h1>
 <p class="by">{e(", ".join(b.get("authors") or []))}, {e(str(b.get("year", "")))}. {e(b.get("edition") or "")}</p>
@@ -305,7 +316,8 @@ their archive. The records below (problems, checks, errata) are from <a href="{e
 <section><h2>Errata ({len(d.get('errata') or [])})</h2>
 {'<ul class="errata">' + errata + '</ul>' if errata else '<p>None recorded yet.</p>'}</section>
 {'<section><h2>Elsewhere in the book</h2><ul>' + loose + '</ul>' + loose_sets + '</section>' if loose or loose_sets else ''}"""
-    return page(b["title"], body, 2, f"{b['title']} ({b.get('year')}): provenance, chapters, problems and errata")
+    return page(b["title"], body, 2, f"{b['title']} ({b.get('year')}): provenance, chapters, problems and errata",
+                math=b.get("macros") or {})
 
 
 def render_excerpt(x):
@@ -360,7 +372,7 @@ def render_chapter(d, c):
 <section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i]) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
 <section><h2>Equations</h2><ul class="equations">{''.join((render_equation(by_id_q[i]) if by_id_q[i].get("chapter") == c["id"] else elsewhere(d, by_id_q[i], "equation")) for i in c['equations'] if i in by_id_q)}</ul></section>
 <section><h2>Problems</h2>{sections or '<p>No exercises in this chapter.</p>'}</section>"""
-    return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4)
+    return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4, math=b.get("macros") or {})
 
 
 def render_shelf(index, books):
@@ -377,22 +389,50 @@ checked by computation, and the errata we found, with the evidence for each.</p>
     return page("Public-domain math and physics books", body, 0, "Public-domain math and physics books, checked")
 
 
-def compact_graph(graph):
+def node_urls(books, all_terms):
+    """A page for each book, chapter and term node, as a link from graph/index.html; a term opens on the first
+    book of the shelf that teaches it."""
+    urls = {}
+    for d in books:
+        bid = d["book"]["id"]
+        urls[bid] = f"../books/{bid}/index.html"
+        for c in d["chapters"]:
+            urls[c["id"]] = f"../books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html"
+        for n in all_terms.get(bid, {}):
+            urls.setdefault(n, f"../books/{bid}/terms/index.html#{term_anchor(n)}")
+    return urls
+
+
+def compact_graph(graph, urls):
     idx = {n["id"]: i for i, n in enumerate(graph["nodes"])}
     nt = {t: i for i, t in enumerate(graph["node_types"])}
     et = {t: i for i, t in enumerate(graph["edge_types"])}
     return {"node_types": graph["node_types"], "edge_types": graph["edge_types"],
             "concept_layer": CONCEPT_LAYER,
             "counts": {"nodes": len(graph["nodes"]), "links": len(graph["links"])},
-            "nodes": [[n["id"], nt[n["type"]], n.get("name") or ""] for n in graph["nodes"]],
+            "nodes": [[n["id"], nt[n["type"]], n.get("name") or ""] + ([urls[n["id"]]] if n["id"] in urls else [])
+                      for n in graph["nodes"]],
             "links": [[idx[l["source"]], idx[l["target"]], et[l["type"]]] for l in graph["links"]]}
 
 
-def render_graph_page(g):
+def render_graph_page(g, books, entries):
+    options = "".join(f'<option value="book:{e(d["book"]["id"])}">{e(d["book"]["title"])}</option>' for d in books)
+    terms = "".join(f'<li><a href="../books/{e(d["book"]["id"])}/terms/index.html">{e(d["book"]["title"])}</a></li>'
+                    for d in books)
     body = f"""<h1>Concept graph</h1>
 <p>{g['counts']['nodes']:,} nodes and {g['counts']['links']:,} links across the shelf
-(<a href="graph.json">graph.json</a>). The 3D view is in preparation.</p>"""
-    return page("Concept graph", body, 1)
+(<a href="graph.json">graph.json</a>). The view starts with the concept layer: books, chapters and the concepts,
+theorems, methods, laws, quantities, units, instruments, experiments and people they teach. Drag to turn it,
+scroll to zoom, and tap a node to name it and reach its page.</p>
+<p><label for="view">View</label> <select id="view"><option value="concepts">The concept layer</option>
+<option value="all">Everything (slow on a phone)</option>{options}</select></p>
+<p class="n"><output id="graph-report">The 3D view needs scripts and WebGL.</output></p>
+<div id="graph" class="graph-canvas"></div>
+<p id="graph-pick" class="pick" aria-live="polite">Tap or click a node to name it.</p>
+<section><h2>The same data, as text</h2><p>Each book's index of terms lists what it teaches and where:</p>
+<ul>{terms}</ul></section>"""
+    return page("Concept graph", body, 1, "The concept graph of the shelf in 3D",
+                scripts=["vendor/3d-force-graph/3d-force-graph.min.js", "graph.js"])
 
 
 def render_about(pin):
@@ -438,9 +478,12 @@ def build(export, out, pin, pd_books_check=True):
             w(f"books/{bid}/terms/index.html", render_terms(d, terms, names, kinds, teaching, entries))
             for c in d["chapters"]:
                 w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c))
-        g = compact_graph(graph)
+        g = compact_graph(graph, node_urls(books, all_terms))
         w("graph/graph.json", json.dumps(g, ensure_ascii=False, separators=(",", ":")))
-        w("graph/index.html", render_graph_page(g))
+        w("graph/index.html", render_graph_page(g, books, entries))
+        for f in ("site.js", "graph.js"):
+            shutil.copy(HERE / f, dist / f)
+        shutil.copytree(HERE / "vendor", dist / "vendor")
         w("version.json", json.dumps({"pd_books": pin, "export_generated_at": generated,
                                       "books": len(books)}, indent=1) + "\n")
         out = Path(out)

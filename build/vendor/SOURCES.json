@@ -1,0 +1,394 @@
+{
+ "katex": {
+  "version": "0.18.7",
+  "licence": "MIT",
+  "tarball": "https://registry.npmjs.org/katex/-/katex-0.18.7.tgz",
+  "integrity": "sha512-h+UCwkZ+4Jz8WQ7MLGfj7UVFrRCizGb912fwF4luGdYsC5paYG1vx+jy+KRcC/XkpjGva/P7nAWuxNnPzRvzHw==",
+  "files": {
+   "katex/LICENSE": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3",
+   "katex/contrib/auto-render.min.js": "e5372d199bcdae8b4de71d0f7ceba72a4ba12774a27c60a6f1f77d03b3228ee4",
+   "katex/fonts/KaTeX_AMS-Regular.ttf": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13",
+   "katex/fonts/KaTeX_AMS-Regular.woff": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251",
+   "katex/fonts/KaTeX_AMS-Regular.woff2": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308",
+   "katex/fonts/KaTeX_Caligraphic-Bold.ttf": "07d8e303ce4fc12b4bb54f1004170dd190a1f3db45d400fe68060df3e0897268",
+   "katex/fonts/KaTeX_Caligraphic-Bold.woff": "1ae6bd7475590e97e7f145a89e09ccde322f7a6bc0b91607b1c8b8ee28290fed",
+   "katex/fonts/KaTeX_Caligraphic-Bold.woff2": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c",
+   "katex/fonts/KaTeX_Caligraphic-Regular.ttf": "ed0b74372feefcbb9c0666b2e210da37b7e49fa7fbbf3eeb11db5f693dacfbb7",
+   "katex/fonts/KaTeX_Caligraphic-Regular.woff": "3398dd02302557a793f2863f88e02d96ce10df2abffa07c8e9fa90775116e65c",
+   "katex/fonts/KaTeX_Caligraphic-Regular.woff2": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b",
+   "katex/fonts/KaTeX_Fraktur-Bold.ttf": "9163df9c7122432e6495b4229fa9071cf9ae86a758ae5efc4924ec2e1a6dbce1",
+   "katex/fonts/KaTeX_Fraktur-Bold.woff": "9be7ceb88004ab8ad124082246fbfcca4091e36385d4ec6ed1df67375dad50fb",
+   "katex/fonts/KaTeX_Fraktur-Bold.woff2": "74444efd593c005e3f4573b44524704c0af0a937fe911cca9e94068d0d140d3f",
+   "katex/fonts/KaTeX_Fraktur-Regular.ttf": "1e6f9579e90e2cac37f8f60a597c436e075c114385652b7cbeb0dec0421291b3",
+   "katex/fonts/KaTeX_Fraktur-Regular.woff": "5e28753be717dac97f559f49bc10be9cf3c124ddcabda6659d11cb68febc6463",
+   "katex/fonts/KaTeX_Fraktur-Regular.woff2": "51814d270d06ff0255dba0799994fa4d8c84d11f09951d47595f4abb1f3602dc",
+   "katex/fonts/KaTeX_Main-Bold.ttf": "138ac28d1663b3037e9c5f52371fa5c63d8324f4a38d22cd573e6ea3a3fd0cf8",
+   "katex/fonts/KaTeX_Main-Bold.woff": "c76c5d696297d51b9cb1639c7da4334f0e7dec81b42b11213b5e25ef671bb822",
+   "katex/fonts/KaTeX_Main-Bold.woff2": "0f60d1b897938ec918c8ce073092411baf9438f6739465693ff18b0f9d20b021",
+   "katex/fonts/KaTeX_Main-BoldItalic.ttf": "70ee1f64a20f2048c21940ef46d0144fd215baa953ca69afd1e31e98544f708f",
+   "katex/fonts/KaTeX_Main-BoldItalic.woff": "a6f7ec0d846ac7ad975adb8959c37ed49b94acbc4ae436db9ce9e20287e4a64c",
+   "katex/fonts/KaTeX_Main-BoldItalic.woff2": "99cd42a3c072d918f2f44984a807cf7aa16e13545fd0875fc07c6c65f99e715b",
+   "katex/fonts/KaTeX_Main-Italic.ttf": "0d85ae7cc30f23790a7f1a58c4a112fdca8aae769b6ba11429af1d98b1b6cb3a",
+   "katex/fonts/KaTeX_Main-Italic.woff": "f1d6ef86f3b11a528bd5185199bd2443ecb2b0dead96d88674b5a2c12be24bdf",
+   "katex/fonts/KaTeX_Main-Italic.woff2": "97479ca6cce906abc961ecac96faa5f9ca2e61b8e7670d475826bcdee9a7c267",
+   "katex/fonts/KaTeX_Main-Regular.ttf": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830",
+   "katex/fonts/KaTeX_Main-Regular.woff": "c6368d87e8a1a3a5d337623d83d8dc4b868f242a9ad476237d6f8d1e0f168cdc",
+   "katex/fonts/KaTeX_Main-Regular.woff2": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866",
+   "katex/fonts/KaTeX_Math-BoldItalic.ttf": "f9377ab0271cda59af24bcffbd46a4d0c8a3572ffafdbb38de2ad5ea7b0d5ee5",
+   "katex/fonts/KaTeX_Math-BoldItalic.woff": "850c0af5c2238497febaf5e461d880bf458c341f42f4f330f1b1ab5698b1998e",
+   "katex/fonts/KaTeX_Math-BoldItalic.woff2": "dc47344dbb6cb5b655c8460d561f4df5f501b90c804ad3c6cec65fe322351ab1",
+   "katex/fonts/KaTeX_Math-Italic.ttf": "08ce98e51b04d58945a301e639e02b6998af29fdfd61a7b8afdd07bbfc479d4a",
+   "katex/fonts/KaTeX_Math-Italic.woff": "8a8d244581371912b8f3f5a23e2437cb2a59cd9bcaebb0346e722c05737a2571",
+   "katex/fonts/KaTeX_Math-Italic.woff2": "7af58c5ec8f132a2ddde9027c6d7814decce4d3b822a11192a42a20e2e973264",
+   "katex/fonts/KaTeX_SansSerif-Bold.ttf": "1ece03f79f95277d57dc7f6b435a74e1379b0d46104a8530286b60ff49369ea0",
+   "katex/fonts/KaTeX_SansSerif-Bold.woff": "ece03cfd83e22c212cdef66feb8442d25a083beb988db3f1883f3f9738d750ba",
+   "katex/fonts/KaTeX_SansSerif-Bold.woff2": "e99ae51144bf1232efcc1bfe5add36262c6866b0faab24fa75740e1b98577a62",
+   "katex/fonts/KaTeX_SansSerif-Italic.ttf": "3931dd81faed86ba021bb2bbdc36f5bed9a38d6b4f4077aca59b265aa1b02083",
+   "katex/fonts/KaTeX_SansSerif-Italic.woff": "91ee67500cc0129aa0ace3ac5c61ff1692102f0f31d02b69347fba35dcb75bf2",
+   "katex/fonts/KaTeX_SansSerif-Italic.woff2": "00b26ac825e2095056396e0553b8ac26d3f8ad158c3826e28b4c45b385c4714a",
+   "katex/fonts/KaTeX_SansSerif-Regular.ttf": "f36ea897e19f4a2e571d1e900e4e3710e438deb05a842486045ba0a3e616a4ad",
+   "katex/fonts/KaTeX_SansSerif-Regular.woff": "11e4dc8a6471ff6d6ee561d53d10fde8f7489e798257ff449c5d37c197435605",
+   "katex/fonts/KaTeX_SansSerif-Regular.woff2": "68e8c73ef42afd3ccec58bf0fba302cce448938e7fc020a5e31f8a952eee1342",
+   "katex/fonts/KaTeX_Script-Regular.ttf": "1c67f068fea8bb09bf099c088b1cf64bd27516a6e07f4684344873564bb66a67",
+   "katex/fonts/KaTeX_Script-Regular.woff": "d96cdf2b3bdd4d64a8fd5f74a4c467f123a8a73931cd435889f08ffaf9bf947a",
+   "katex/fonts/KaTeX_Script-Regular.woff2": "036d4e95149b69ff9bcc0cd55771efeb25ffa3947293e69acd78d5ac328c684b",
+   "katex/fonts/KaTeX_Size1-Regular.ttf": "95b6d2f1a50173bfedb8c63e1d1c99b10427d0a4df4201cb44513b226951a22b",
+   "katex/fonts/KaTeX_Size1-Regular.woff": "c943cc986384f59e86bea5fd7dc50a9c4dfe567a7c05eb40d6790720dead97c9",
+   "katex/fonts/KaTeX_Size1-Regular.woff2": "6b47c40166b6dbe21a5dfca7718413f2147fd2399be1ba605d8ad39cedf25dfe",
+   "katex/fonts/KaTeX_Size2-Regular.ttf": "a6b2099fb555c60e3a0db3a08842ebf1d732c6eb4e4bf44913613bed4fc4e39b",
+   "katex/fonts/KaTeX_Size2-Regular.woff": "2014c523c3210bcc166648c4d4cc57f05b747df07a24277bf71c51e67dc79e3d",
+   "katex/fonts/KaTeX_Size2-Regular.woff2": "d04c54219f9eaec6d4d4fd42dfb28785975a4794d6b2fc71e566b9cd6db842dd",
+   "katex/fonts/KaTeX_Size3-Regular.ttf": "500e04d54f0d51666332c9d2089aa803be22aa878eca539e59fa53c6e522b082",
+   "katex/fonts/KaTeX_Size3-Regular.woff": "6ab6b62e9b62dae2c00dd90f791bd10950be0ecc3490d7d6045f51c2e8fe0949",
+   "katex/fonts/KaTeX_Size3-Regular.woff2": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995",
+   "katex/fonts/KaTeX_Size4-Regular.ttf": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
+   "katex/fonts/KaTeX_Size4-Regular.woff": "99f9c6750b489c9462bf04900bd3f939df9b829339daaaaa99ef5495cdddea58",
+   "katex/fonts/KaTeX_Size4-Regular.woff2": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
+   "katex/fonts/KaTeX_Typewriter-Regular.ttf": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa",
+   "katex/fonts/KaTeX_Typewriter-Regular.woff": "e14fed02b1aba7ce9f5afd5844b5d0321b22351febc720e0de8b8723527609f7",
+   "katex/fonts/KaTeX_Typewriter-Regular.woff2": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
+   "katex/katex.min.css": "50d9c78e03da144a021001b7de679133355179bcb06fd11e9e309223056a03dd",
+   "katex/katex.min.js": "10a91b479cd927446ceb60409fb0d72b5d0d05eaf446c9e52fafd64058c84540"
+  },
+  "licence_sha256": "d3c8c167dfa0a8a7f2ace9fc23ddfb89e609adc13b113e958bede249592b852d"
+ },
+ "3d-force-graph": {
+  "version": "1.80.0",
+  "licence": "MIT",
+  "tarball": "https://registry.npmjs.org/3d-force-graph/-/3d-force-graph-1.80.0.tgz",
+  "integrity": "sha512-tzI353gW1nXPpnC7VTa3JjMg+3cp77qOLUFO0vucPTfF+q5R6sQsNsIqVTbRIb7RSypn14nBa4yfkOe9ThxASw==",
+  "files": {
+   "3d-force-graph/3d-force-graph.min.js": "d96e738edcca580edd524730c1c6b05ed2efce028c23ca95db1bf43033a72e42",
+   "3d-force-graph/LICENSE": "7262e566e874d1ce8cfadace01d4f635f8d704b6bdf7b4345cc028e5faeafded"
+  },
+  "bundles": [
+   {
+    "name": "@babel/runtime",
+    "version": "7.29.10",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.10.tgz",
+    "integrity": "sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "8f08c824b2bb54eda2b6ee6053d2eeed46877b3b7b2ef3f60fc2b9fa580f54b2"
+   },
+   {
+    "name": "@tweenjs/tween.js",
+    "version": "25.0.0",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/@tweenjs/tween.js/-/tween.js-25.0.0.tgz",
+    "integrity": "sha512-XKLA6syeBUaPzx4j3qwMqzzq+V4uo72BnlbOjmuljLrRqdsd3qnzvZZoxvMHZ23ndsRS4aufU6JOZYpCbU6T1A==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "4018ec49954249ccf1d7c978f10394903cd6f392b32e82d67212dceb63fe9847"
+   },
+   {
+    "name": "accessor-fn",
+    "version": "1.5.3",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/accessor-fn/-/accessor-fn-1.5.3.tgz",
+    "integrity": "sha512-rkAofCwe/FvYFUlMB0v0gWmhqtfAtV1IUkdPbfhTUyYniu5LrC0A0UJkTH0Jv3S8SvwkmfuAlY+mQIJATdocMA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "d3-array",
+    "version": "3.2.4",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-array/-/d3-array-3.2.4.tgz",
+    "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "f57e3a2cabf2b43ab2fc942a8e9f4b38366ab0d1f859c6439b1fb69e80d9af73"
+   },
+   {
+    "name": "d3-binarytree",
+    "version": "1.0.2",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/d3-binarytree/-/d3-binarytree-1.0.2.tgz",
+    "integrity": "sha512-cElUNH+sHu95L04m92pG73t2MEJXKu+GeKUN1TJkFsu93E5W8E9Sc3kHEGJKgenGvj19m6upSn2EunvMgMD2Yw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "d3-color",
+    "version": "3.1.0",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-color/-/d3-color-3.1.0.tgz",
+    "integrity": "sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "4f4f9997e3d96636b08171484bf3e2b5a8a46745e2b0dd4d4f86b0e5cfa632e8"
+   },
+   {
+    "name": "d3-dispatch",
+    "version": "3.0.1",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-dispatch/-/d3-dispatch-3.0.1.tgz",
+    "integrity": "sha512-rzUyPU/S7rwUflMyLc1ETDeBj0NRuHKKAcvukozwhshr6g6c5d8zh4c2gQjY2bZ0dXeGLWc1PF174P2tVvKhfg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-force-3d",
+    "version": "3.0.6",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/d3-force-3d/-/d3-force-3d-3.0.6.tgz",
+    "integrity": "sha512-4tsKHUPLOVkyfEffZo1v6sFHvGFwAIIjt/W8IThbp08DYAsXZck+2pSHEG5W1+gQgEvFLdZkYvmJAbRM2EzMnA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "d3-format",
+    "version": "3.1.2",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-format/-/d3-format-3.1.2.tgz",
+    "integrity": "sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "9fe3e95ca3e8ef778fc93263946e9c4e8a10ff3afe9c3333f54402bb99079bc1"
+   },
+   {
+    "name": "d3-interpolate",
+    "version": "3.0.1",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-interpolate/-/d3-interpolate-3.0.1.tgz",
+    "integrity": "sha512-3bYs1rOD33uo8aqJfKP3JWPAibgw8Zm2+L9vBKEHJ2Rg+viTR7o5Mmv5mZcieN+FRYaAOWX5SJATX6k1PWz72g==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-octree",
+    "version": "1.1.0",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/d3-octree/-/d3-octree-1.1.0.tgz",
+    "integrity": "sha512-F8gPlqpP+HwRPMO/8uOu5wjH110+6q4cgJvgJT6vlpy3BEaDIKlTZrgHKZSp/i1InRpVfh4puY/kvL6MxK930A==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "d3-quadtree",
+    "version": "3.0.1",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-quadtree/-/d3-quadtree-3.0.1.tgz",
+    "integrity": "sha512-04xDrxQTDTCFwP5H6hRhsRcb9xxv2RzkcsygFzmkSIOJy3PeRJP7sNk3VRIbKXcog561P9oU0/rVH6vDROAgUw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-scale",
+    "version": "4.0.2",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-scale/-/d3-scale-4.0.2.tgz",
+    "integrity": "sha512-GZW464g1SH7ag3Y7hXjf8RoUuAFIqklOAq3MRl4OaWabTFJY9PN/E1YklhXLh+OQ3fM9yS2nOkCoS+WLZ6kvxQ==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-scale-chromatic",
+    "version": "3.1.0",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-scale-chromatic/-/d3-scale-chromatic-3.1.0.tgz",
+    "integrity": "sha512-A3s5PWiZ9YCXFye1o246KoscMWqf8BsD9eRiJ3He7C9OBaxKhAd5TFCdEx/7VbKtxxTsu//1mMJFrEt572cEyQ==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "1549638d9e45cf99379d6e71aa706583e5952cd875a26a02f58c9b26499c94e9"
+   },
+   {
+    "name": "d3-selection",
+    "version": "3.0.0",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-selection/-/d3-selection-3.0.0.tgz",
+    "integrity": "sha512-fmTRWbNMmsmWq6xJV8D19U/gw/bwrHfNXxrIN+HfZgnzqTHp9jOmKMhsTUjXOJnZOdZY9Q28y4yebKzqDKlxlQ==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-time",
+    "version": "3.1.0",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-time/-/d3-time-3.1.0.tgz",
+    "integrity": "sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "4f4f9997e3d96636b08171484bf3e2b5a8a46745e2b0dd4d4f86b0e5cfa632e8"
+   },
+   {
+    "name": "d3-time-format",
+    "version": "4.1.0",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-time-format/-/d3-time-format-4.1.0.tgz",
+    "integrity": "sha512-dJxPBlzC7NugB2PDLwo9Q8JiTR3M3e4/XANkreKSUxF8vvXKqm1Yfq4Q5dl8budlunRVlUUaDUgFt7eA8D6NLg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "d3-timer",
+    "version": "3.0.1",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz",
+    "integrity": "sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "6019bf3451952141c4561a8a814c965b71166df316a8c7f3f435f090b3c329c1"
+   },
+   {
+    "name": "data-bind-mapper",
+    "version": "1.0.3",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/data-bind-mapper/-/data-bind-mapper-1.0.3.tgz",
+    "integrity": "sha512-QmU3lyEnbENQPo0M1F9BMu4s6cqNNp8iJA+b/HP2sSb7pf3dxwF3+EP1eO69rwBfH9kFJ1apmzrtogAmVt2/Xw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "bd998d5fb70f950007b0a0ca73bd6ecbe02ee8b398eef6ec2ac98cc1472613d8"
+   },
+   {
+    "name": "float-tooltip",
+    "version": "1.7.5",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/float-tooltip/-/float-tooltip-1.7.5.tgz",
+    "integrity": "sha512-/kXzuDnnBqyyWyhDMH7+PfP8J/oXiAavGzcRxASOMRHFuReDtofizLLJsf7nnDLAfEaMW4pVWaXrAjtnglpEkg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "ad23b6bb1f86b6d0817c513462281c97508fd5644225e98d8f05dcbdcfe60cf4"
+   },
+   {
+    "name": "internmap",
+    "version": "2.0.3",
+    "licence": "ISC",
+    "tarball": "https://registry.npmjs.org/internmap/-/internmap-2.0.3.tgz",
+    "integrity": "sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "f4bb8f655fdb4d119878a0eea6dfcb871da509d83baa7426794f7c70b9bb9d46"
+   },
+   {
+    "name": "kapsule",
+    "version": "1.16.3",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/kapsule/-/kapsule-1.16.3.tgz",
+    "integrity": "sha512-4+5mNNf4vZDSwPhKprKwz3330iisPrb08JyMgbsdFrimBCKNHecua/WBwvVg3n7vwx0C1ARjfhwIpbrbd9n5wg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "lodash-es",
+    "version": "4.18.1",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/lodash-es/-/lodash-es-4.18.1.tgz",
+    "integrity": "sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "2314aa0e2bae2fcbc099b29c8815e26688cef6c2cf76226927a3f24f091f7114"
+   },
+   {
+    "name": "ngraph.events",
+    "version": "1.4.0",
+    "licence": "BSD-3-Clause",
+    "tarball": "https://registry.npmjs.org/ngraph.events/-/ngraph.events-1.4.0.tgz",
+    "integrity": "sha512-NeDGI4DSyjBNBRtA86222JoYietsmCXbs8CEB0dZ51Xeh4lhVl1y3wpWLumczvnha8sFQIW4E0vvVWwgmX2mGw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "083f6503efc98d6a9af8a7d6f45dd34b660ccec36b4970147c5c0826c969164f"
+   },
+   {
+    "name": "ngraph.forcelayout",
+    "version": "3.3.1",
+    "licence": "BSD-3-Clause",
+    "tarball": "https://registry.npmjs.org/ngraph.forcelayout/-/ngraph.forcelayout-3.3.1.tgz",
+    "integrity": "sha512-MKBuEh1wujyQHFTW57y5vd/uuEOK0XfXYxm3lC7kktjJLRdt/KEKEknyOlc6tjXflqBKEuYBBcu7Ax5VY+S6aw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c824066e012ac3eecc0544cc4c24619a146da9c1c6e2db1798dc15438ddff393"
+   },
+   {
+    "name": "ngraph.graph",
+    "version": "20.1.2",
+    "licence": "BSD-3-Clause",
+    "tarball": "https://registry.npmjs.org/ngraph.graph/-/ngraph.graph-20.1.2.tgz",
+    "integrity": "sha512-W/G3GBR3Y5UxMLHTUCPP9v+pbtpzwuAEIqP5oZV+9IwgxAIEZwh+Foc60iPc1idlnK7Zxu0p3puxAyNmDvBd0Q==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c3b81436fe3dffa8c198ae59f883406da8c2df6f3a086f45563cfee2910618e5"
+   },
+   {
+    "name": "ngraph.merge",
+    "version": "1.0.0",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/ngraph.merge/-/ngraph.merge-1.0.0.tgz",
+    "integrity": "sha512-5J8YjGITUJeapsomtTALYsw7rFveYkM+lBj3QiYZ79EymQcuri65Nw3knQtFxQBU1r5iOaVRXrSwMENUPK62Vg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "48203a467a2ec43d866be41f986d8ddf4ffff8c3c2a2a997d586718c11aa7819"
+   },
+   {
+    "name": "ngraph.random",
+    "version": "1.2.0",
+    "licence": "BSD-3-Clause",
+    "tarball": "https://registry.npmjs.org/ngraph.random/-/ngraph.random-1.2.0.tgz",
+    "integrity": "sha512-4EUeAGbB2HWX9njd6bP6tciN6ByJfoaAvmVL9QTaZSeXrW46eNGA9GajiXiPBbvFqxUWFkEbyo6x5qsACUuVfA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "dffec1524f46db2535a0eb6ff27929181d5414a00ae5a397fd8e248e94bd84d9"
+   },
+   {
+    "name": "polished",
+    "version": "4.3.1",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/polished/-/polished-4.3.1.tgz",
+    "integrity": "sha512-OBatVyC/N7SCW/FaDHrSd+vn0o5cS855TOmYi4OkdWUMSJCET/xip//ch8xGUvtr3i44X9LVyWwQlRMTN3pwSA==",
+    "licence_file": "LICENSE.md",
+    "licence_sha256": "d0048831123ceb9f3159854a5eb310ce42673ab6de94c0b0fdcca91fc1221bab"
+   },
+   {
+    "name": "preact",
+    "version": "10.29.8",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/preact/-/preact-10.29.8.tgz",
+    "integrity": "sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "ecc934075c786ff5a83b109f49b32b1efb57cd99410e194e15b01dc144dc7fd5"
+   },
+   {
+    "name": "three",
+    "version": "0.186.1",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/three/-/three-0.186.1.tgz",
+    "integrity": "sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "e981c93a41a4ee2785c1ca73b9f0b66959fcb014d9b8a85fb6155aaffd0eaae7"
+   },
+   {
+    "name": "three-forcegraph",
+    "version": "1.43.6",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/three-forcegraph/-/three-forcegraph-1.43.6.tgz",
+    "integrity": "sha512-fayF9Cn6XfSUJOcKUcJ1tg8EQEHP9X3wELzNX/Ik3TxnbHTfYuEFspSld7GvK8RwEpsyoJaPbfEGgMTJoiywYg==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+   },
+   {
+    "name": "three-render-objects",
+    "version": "1.43.0",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/three-render-objects/-/three-render-objects-1.43.0.tgz",
+    "integrity": "sha512-CoGJ7dRJsbtGoR4YhxUQlgocZ4vnmVC0YEFsvTye0DKifHPogoa7zl9knea+3EG2+biDicTC1PW7O02TxlV2vQ==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "5967364072de20065a45da9bad41756fb2080a8a6363e62be2df779bd1b8744d"
+   },
+   {
+    "name": "tinycolor2",
+    "version": "1.6.0",
+    "licence": "MIT",
+    "tarball": "https://registry.npmjs.org/tinycolor2/-/tinycolor2-1.6.0.tgz",
+    "integrity": "sha512-XPaBkWQJdsf3pLKJV9p4qN/S+fm2Oj8AIPo1BTUhg5oxkvm9+SVEGFdhyOz7tTdUTfvxMiAs4sp6/eZO2Ew+pw==",
+    "licence_file": "LICENSE",
+    "licence_sha256": "c6cb470a9ba0a50d57611aeec1f31da609c5aefdbee8eac7f289bcb0e30625fa"
+   }
+  ],
+  "licence_sha256": "c81e08f2a4364d08611c888e00017d1000168d4a6991b2df34ccec52e71c84a5"
+ }
+}

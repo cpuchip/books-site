@@ -11,6 +11,7 @@ and says so; the build that deploys never passes it.
 requires all four red.
 """
 import argparse
+import re
 import shutil
 import sys
 import tempfile
@@ -44,9 +45,26 @@ def scan(dist):
     return pages
 
 
+CSS_URL = re.compile(r"url\(\s*['\"]?([^'\")]+)['\"]?\s*\)")
+
+
+def stylesheets(dist):
+    """Every url() in every served stylesheet must name a file (KaTeX's fonts); data: URIs are inline."""
+    bad = []
+    for css in sorted(Path(dist).resolve().rglob("*.css")):
+        for u in CSS_URL.findall(css.read_text(encoding="utf-8")):
+            if u.startswith("data:"):
+                continue
+            if urlsplit(u).scheme or u.startswith("//"):
+                bad.append((css, u, "a stylesheet loads from outside the site"))
+            elif not (css.parent / unquote(urldefrag(u)[0].split("?")[0])).resolve().is_file():
+                bad.append((css, u, "no such file"))
+    return bad
+
+
 def internal(dist, pages):
     dist = Path(dist).resolve()
-    bad, external, reached = [], set(), {}
+    bad, external, reached = stylesheets(dist), set(), {}
     for page, h in pages.items():
         for link in h.links:
             if urlsplit(link).scheme in ("http", "https"):
@@ -126,14 +144,18 @@ def main():
             idx.write_text(idx.read_text(encoding="utf-8").replace(
                 "</main>", '<a href="books/no-such-book/index.html">x</a>'
                            '<a href="about/index.html#no-such-id">y</a><a href="">z</a></main>', 1), encoding="utf-8")
+            (copy / "site.css").write_text((copy / "site.css").read_text(encoding="utf-8")
+                                           + "\n.x { background: url(no-such-font.woff2); }\n", encoding="utf-8")
             (copy / "orphan").mkdir()
             (copy / "orphan" / "index.html").write_text("<p>nobody links here</p>", encoding="utf-8")
             _, bad, _, _ = run(copy, offline=True)
             got = sorted(link for _, link, _ in bad)
-            if got != ["", "(no link reaches this page)", "about/index.html#no-such-id", "books/no-such-book/index.html"]:
+            if got != ["", "(no link reaches this page)", "about/index.html#no-such-id", "books/no-such-book/index.html",
+                       "no-such-font.woff2"]:
                 print(f"LINK CONTROL FAILED: planted two broken links, checker said {got[:5]}")
                 sys.exit(2)
-            print("link control: RED as planted (a missing file, a missing fragment, an empty link, an orphan page)")
+            print("link control: RED as planted (a missing file, a missing fragment, an empty link, an orphan page, "
+                  "a missing stylesheet url)")
     pages, bad, external, ext_bad = run(a.dist, a.offline)
     n = sum(len(h.links) for h in pages.values())
     print(f"links: {n} on {len(pages)} pages; {len(external)} distinct external"

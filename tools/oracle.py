@@ -72,7 +72,9 @@ TERM_LABELS = {"concept": "Concepts", "theorem": "Theorems", "method": "Methods"
 # markup the site never emits; anywhere on a page, each is red (the build hides nothing, so nothing may hide)
 FORBIDDEN_TAGS = {"base", "template", "noscript", "iframe", "object", "embed", "style", "frame", "frameset"}
 FORBIDDEN_ATTRS = {"hidden", "style", "aria-hidden", "inert"}
-NESTING = {("exercise_set", "problem")}  # the only unit allowed inside another unit
+NESTING = {("exercise_set", "problem")}
+# sideways clipping cuts text off instead of letting it scroll: only the graph's canvas box may clip
+CLIP_ALLOWED = {".graph-canvas"}  # the only unit allowed inside another unit
 HIDING_CSS = re.compile(r"(?<![\w-])(?:display\s*:\s*none|visibility\s*:|opacity\s*:\s*0|font-size\s*:\s*0|content\s*:"
                         r"|clip(?:-path)?\s*:|text-indent\s*:\s*-)", re.I)
 
@@ -121,6 +123,10 @@ def export_units(export):
             return book_page
 
         add("book", bid, "index.html", d["book"].get("title"))
+        if d["book"].get("macros"):  # KaTeX takes these from <main data-macros>: exactly the export's, on its math pages
+            want_macros = json.dumps(d["book"]["macros"], sort_keys=True, ensure_ascii=False)
+            for page in [book_page] + [f"books/{bid}/ch/{c['id'][len(bid) + 1:]}/index.html" for c in d["chapters"]]:
+                stated[(page, "macros")] = want_macros
         for c in d["chapters"]:
             chapter_book[c["id"]] = bid
             chapter_label[c["id"]] = norm(c.get("title") or c.get("number") or c["id"][len(bid) + 1:])
@@ -215,6 +221,8 @@ class _Units(HTMLParser):
             self.bad.append(f"<{tag} {k}>")
         if tag == "script" and "src" not in a:
             self.bad.append("<script> without src")
+        if re.search(r"(^|\s)katex", a.get("class") or ""):
+            self.bad.append(f"<{tag} class={a['class']!r}>: a vendor stylesheet's class in the built page")
         parent = self.stack[-1] if self.stack else None
         group = a.get("data-group") or (parent["group"] if parent else None)
         first_of = None
@@ -241,6 +249,12 @@ class _Units(HTMLParser):
             owner = unit or next((e["unit"] for e in reversed(self.stack) if e["unit"] is not None), None)
             fld = [a["data-field"], [], owner]
             self.fields.append(fld)
+        if tag == "main" and a.get("data-macros") is not None:
+            try:
+                macros = json.dumps(json.loads(a["data-macros"]), sort_keys=True, ensure_ascii=False)
+            except ValueError:
+                macros = "(not JSON)"
+            self.counts.append(["macros", [macros], None, None])
         count = None
         if "data-count" in a:
             owner = next((e["unit"] for e in reversed(self.stack) if e["unit"] is not None), None)
@@ -310,8 +324,21 @@ def site_units(dist):
     out, stated, pages = defaultdict(list), defaultdict(list), defaultdict(list)
     dist = Path(dist)
     for css in sorted(dist.rglob("*.css")):
-        for m in HIDING_CSS.finditer(css.read_text(encoding="utf-8")):
+        if css.relative_to(dist).parts[0] == "vendor":
+            continue  # KaTeX's own rules (proven upstream by vendorcheck) style only what KaTeX makes at run time;
+            # the rule below keeps any built element out of their reach
+        text = css.read_text(encoding="utf-8")
+        for m in HIDING_CSS.finditer(text):
             pages[css.relative_to(dist).as_posix()].append(f"a stylesheet rule that can hide text: {m.group()!r}")
+        for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", text, flags=re.S)):
+            selector = " ".join(rule.group(1).split())
+            for decl in rule.group(2).split(";"):
+                # "overflow: hidden" clips both ways; "overflow-x: hidden" or "overflow: hidden auto" clips sideways
+                d = " ".join(decl.split()).lower()
+                clips = (re.fullmatch(r"overflow-x\s?:\s?(hidden|clip)", d)
+                         or re.fullmatch(r"overflow\s?:\s?(hidden|clip)(\s+\S+)?", d))
+                if clips and selector not in CLIP_ALLOWED:
+                    pages[css.relative_to(dist).as_posix()].append(f"{selector} clips sideways: {d!r}")
     for page in sorted(dist.rglob("*.html")):
         p = _Units()
         p.feed(page.read_text(encoding="utf-8"))
@@ -417,9 +444,12 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
             said = site_stated.get(key, [])
             label = f"{key[0]} {key[1]}"
             if key not in stated:
-                out.append(("count", label, "extra", f"the page states {said[0]!r}, the export has no such number"))
+                out.append(("count", label, "extra", f"the page states {said[0][:60]!r}, the export has no such value"))
             elif not said:
                 out.append(("count", label, "missing", f"the export has {stated[key]}, the page does not state it"))
+            elif key[1] == "macros":
+                if said != [stated[key]]:
+                    out.append(("count", label, "macros", f"the page's macros {said[0][:60]!r} are not the export's"))
             elif stated_number(said) != stated[key]:
                 out.append(("count", label, "count", f"the page states {said}, the export has {stated[key]}"))
     for page, bad in sorted((pages or {}).items()):
@@ -733,6 +763,7 @@ def run_controls(export, dist, units, counts, stated, build, seed):
             by_page[units[(k, i)]["page"]].append(i)
     x1, x2 = rng.sample(rng.choice(sorted(v for v in by_page.values() if len(v) >= 2)), 2)
     tp = rng.choice(sorted({terms_page(i) for i in terms}))
+    macro_page = rng.choice(sorted({units[(k, i)]["page"] for k, i in units if k == "equation" and "/ch/" in units[(k, i)]["page"]}))
     groups_on = sorted({units[("term", i)]["group"] for i in terms if terms_page(i) == tp})
     book_of = lambda i: f"books/{i.split('/')[0]}/index.html"
     site_plants = [
@@ -772,10 +803,17 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ("wrap a term in a template", lambda c: plant_in(c, "term", t12, "<template></template>"), {("page", terms_page(t12), "markup")}),
         ("style a term's name invisible", lambda c: plant_text(c, terms_page(t12), '<span class="tn">', '<span class="tn" style="visibility:hidden">'),
          {("page", terms_page(t12), "markup")}),
+        ("clip the page sideways", lambda c: plant_text(c, "site.css", "main {", "main { overflow-x: hidden; ")
+         if "main {" in (Path(dist) / "site.css").read_text(encoding="utf-8")
+         else plant_text(c, "site.css", ".top, main, .foot {", ".top, main, .foot { overflow: hidden; "),
+         {("page", "site.css", "markup")}),
         ("hide text with the stylesheet", lambda c: plant_text(c, "site.css", ".tn {", ".tn { display: none; "), {("page", "site.css", "markup")}),
         ("cut a page off inside its last term", lambda c: plant_truncate(c, t13),
          {("term", t13, "markup"), ("term", t13, "link"), ("page", terms_page(t13), "markup")}),
         ("nest an excerpt inside another", lambda c: plant_nest(c, x1, x2), {("excerpt", x1, "markup")}),
+        ("give a page macros the export does not", lambda c: plant_text(c, macro_page, "<main>",
+                                                                        '<main data-macros="{&quot;\\\\frac&quot;: &quot;\\\\binom&quot;}">'),
+         {("count", f"{macro_page} macros", "extra" if (macro_page, "macros") not in stated else "macros")}),
         ("point a jump link at the wrong group", lambda c: plant_text(c, tp, f'<a href="#g-{groups_on[0]}">', '<a href="#g-nowhere">'),
          {("page", tp, "markup")}),
     ]

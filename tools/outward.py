@@ -30,6 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 CLAUDE = re.compile(r"claude\.ai|Claude-Session", re.I)
 EM = "\u2014"
+VENDOR_OURS = {"vendor/SOURCES.json", "vendor/THIRD-PARTY-NOTICES.txt"}  # written by tools/vendor.py: checked
 TEXT_FILES = {".json", ".css", ".js", ".mjs", ".txt", ".svg", ".xml"}
 
 
@@ -115,6 +116,8 @@ def check(export, dist):
         if not f.is_file():
             continue
         rel = f.relative_to(dist).as_posix()
+        if rel.startswith("vendor/") and rel not in VENDOR_OURS:
+            continue  # third-party code, byte-identical to its npm release (tools/vendorcheck.py), not our text
         if f.suffix == ".html":
             t = _Text()
             t.feed(f.read_text(encoding="utf-8"))

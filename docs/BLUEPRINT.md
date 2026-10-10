@@ -143,12 +143,38 @@ misplaces or garbles the export; hostile markup is shut out by the allowlist abo
 - A shared concept that the book does not teach is plain text, checked by containment only (none at b3c614f).
 - The one relation with no shared terms (Blackburn and Boyden) says only "0 shared terms recorded"; the export
   relates them by one `prerequisite_edges` entry, which the site does not interpret.
-- linkcheck reads href and src only; the build emits no srcset, poster, action or CSS url().
+- linkcheck reads href, src and the url() of served stylesheets; the build emits no srcset, poster or action.
+- Text fields are shown as text with their math typeset: the export's Markdown emphasis (`*constants*`) shows
+  as asterisks. Rendering Markdown needs either a library (Michael's to approve) or a renderer of our own, and
+  then an oracle for what it may change.
+- The browser check runs where a Chromium binary is (the Linux rehearsal), not in the Dokploy build; the
+  build's last line says whether it ran.
+- The annotation check proves each typeset formula came from its page's own TeX (display equations in page
+  order), not that KaTeX drew it rightly; KaTeX is trusted as published (byte-identical, checked).
+- The graph check proves the data handed to the renderer (counts and a digest of every node's id, label and
+  link and every link's ends), not the pixels: a script that set nodeVisibility(false) would pass. Three ways to
+  read what was drawn (three.js's render counters after two animation frames, a synchronous render, refresh()
+  then render) were tried on 2026-10-10 and none is deterministic under headless virtual time: frames come at
+  random and a synchronous render draws nothing before the library's deferred build. The rehearsal's
+  screenshots are the check on pixels.
+- Our own scripts are trusted not to lie about themselves: site.js reports the macros it handed to KaTeX
+  (checked against the export) and the tap names a node through the digested label and link, but a site.js
+  that hard-coded other macros, or a tap handler rewritten to name another node, would pass. They are small
+  and reviewed; a check from outside cannot stop code under test from misreporting itself.
+- The page measures its own overflow (site.js), in a 500 px window; the oracle forbids sideways clipping in our
+  CSS (only the graph's canvas may), so "no overflow" cannot be had by cutting text off.
+- At b3c614f the export writes a literal dollar bare, as math's `$` is written: 19 prose spans typeset as math
+  (Boyden, Wentworth First Steps), 148 fields left with an unmatched `$`, and 142 LaTeX commands outside any
+  delimiter. The data owner is fixing all three for the next export (asked 2026-10-10, with these counts as the
+  before/after check); until then those scroll in their own box rather than widen the page.
+- Inside one text field, a `\gdef` in one formula reaches the next (auto-render shares its options).
+- The notices name the versions npm resolves today for 3d-force-graph 1.80.0's tree; the bundle carries its
+  author's (three r183), under the same licences.
 - A redirect counts as an answer (an archive.org item that is gone returns a real 404, checked).
 
 ## The 3D prototype (2026-10-10, thrown away; screenshots in docs/evidence/)
 
-3d-force-graph 1.77.0 in headless Chromium (SwiftShader) on lepton:
+3d-force-graph 1.77.0 in headless Chromium (SwiftShader) on the build box:
 - Full graph, 19,904 nodes / 58,517 links: loads, the library holds exactly those counts, 325 MB JS heap,
   10 simulation ticks in 17 s, and the picture is an unreadable ball.
 - Concept layer only (book, person, chapter, concept, method, theorem, law, quantity, unit, instrument,
@@ -164,6 +190,77 @@ is the likely next step and needs a decision on running node in the build.
 three.js + 3d-force-graph (MIT) for the graph, KaTeX (MIT) for LaTeX. Vendored with their LICENSE
 files, no CDN.
 
+## Unit 3: math and the 3D graph (written 2026-10-10, before its code)
+
+**Vendored, never fetched by a reader.** `build/vendor/` holds exactly these published files, copied unchanged
+from their npm tarballs: KaTeX 0.18.7 (`katex.min.js`, `katex.min.css`, its `fonts/`, `contrib/auto-render.min.js`,
+`LICENSE`) and 3d-force-graph 1.80.0 (`3d-force-graph.min.js`, which bundles three r183
+and its other dependencies, and `LICENSE`). Versions are at least two weeks old when pinned.
+`build/vendor/SOURCES.json` records, per package, the tarball URL, npm's published integrity and the sha256 of
+every vendored file. `build/vendor/THIRD-PARTY-NOTICES.txt` carries the licence text of every package in
+3d-force-graph's dependency tree (MIT, ISC and BSD-3-Clause; BSD-3 requires the notice) and says that the versions
+inside the bundle are the ones its author built with; each notice is the package's own licence file, its sha256
+recorded with the package's tarball and integrity. `tools/vendor.py` makes all three (maintainer tool, run by hand,
+never by the build). **Withheld:** KaTeX's `contrib/mhchem` (chemistry, `\ce`) is adapted from MathJax code under
+Apache-2.0, and the libraries were approved as MIT; it waits for Michael (asked 2026-10-10), and `\ce` formulas
+show as source until then.
+
+**Math.** `build/site.js` (ours) typesets in the reader's browser: every `data-field="latex"` element as display
+math, and `$...$` inside every text field, with the book's own macros (`book.macros` in the export, carried on the
+page as `data-macros`; absent until the export has them). An erratum's "In the source:" line is the source as
+printed and is never typeset. A bare alignment row (an `&` outside any
+environment) is wrapped in `aligned` for display only; the HTML keeps the export's LaTeX, so the oracle is
+unchanged. KaTeX runs with errors on: a formula it cannot typeset stays visible as its source, and the page footer
+says so ("N formulas typeset, M shown as source"), written into an `<output id="math-report">`. A formula or
+title too wide for a phone scrolls inside itself; the page never does.
+
+**Graph.** `graph/index.html` with `build/graph.js` (ours): the concept layer by default, a book filter (a
+`<select>`; the view is read from the page's query string), the whole graph on request. A node click opens its
+page (a book, a chapter, or a term: in a book's view on that book's index of terms, elsewhere on the first book of
+the shelf that teaches it). `<output id="graph-report">` states what
+is drawn, with a digest of exactly what the graph holds. A tap names a node and offers its page (no hover on
+touch). The canvas takes the page's colours. The terms pages are the accessible way into the same data, linked
+from the graph page.
+
+**Checks added (each with planted controls, red first):**
+1. `tools/vendorcheck.py`: SOURCES.json holds exactly the pins in `tools/vendor.py`, from the npm registry; every
+   file under `dist/vendor/` is listed with its sha256, nothing unlisted; exactly one notice per package, its
+   header stating the licence the package declares and its text byte-for-byte the package's licence file (by
+   sha256), and the introduction the one `tools/vendor.py` writes; online, each tarball (the two libraries and all 34 bundled packages) is
+   downloaded again and must match npm's integrity, hold the same bytes and carry the same licence. Controls: a
+   flipped byte, an unlisted file, a dropped notice, a notice with other words, a changed licence header, a
+   duplicate notice, a version off its pin.
+2. `tools/browsercheck.py`: headless Chromium (a browser binary run as a command-line tool with `--dump-dom`; no
+   browser-automation library) loads every page from a local server it runs and stops, with every host but
+   127.0.0.1 resolved nowhere and WebRTC kept off the network, in a 500 px window, and reads the reports the pages
+   wrote. Math, on every book and chapter page: typeset + source equals the formulas the checker finds in the
+   HTML itself; every typeset formula's TeX (KaTeX's MathML annotation) is one of the page's own sources; the
+   page is no wider than the window; each book shows no more as source than its ceiling. Graph, in every view
+   (concept layer, everything, each book): the node and link counts and a digest of every node's id, label and
+   link and every link's ends, against the same computed from the export. Controls: a bad formula (one more as
+   source, over its ceiling), a page without its script, equations typeset from other text, a page too wide, a
+   graph one node short, a graph with one label wrong. The browser check runs in the Linux rehearsal before any deploy (`CHROMIUM=path`); a build
+   without it says so on its last line, as `OFFLINE` does.
+3. linkcheck also reads `url()` in served CSS (KaTeX's fonts) and `<script src>`.
+4. outward skips `vendor/` (third-party code, proven byte-identical to upstream by check 1) except the two files
+   we write there. The oracle's hiding rule skips vendored CSS (KaTeX's rules style only what KaTeX makes at run
+   time) and in exchange forbids any `katex` class in the built HTML; it also requires each book's math pages to
+   carry exactly the export's `book.macros`, or none (control: a page given macros the export does not have).
+
+**Measured 2026-10-10 at b3c614f** (Chromium 130 headless, SwiftShader; pages 8 at a time, graph views 2 at a time;
+about 1m50 with controls): 250 pages, 23,967 formulas typeset and 1,070 shown as source (mhchem withheld), and on every page the two add up to the checker's own
+count of the HTML (so the model of auto-render's delimiters holds on all of it). Graph views: concept layer 2,829 /
+7,910, everything 19,904 / 58,517, and each of the 15 books (Thompson 236 / 793), all equal to the export. Node
+links: 2,599 (15 books, 235 chapters, 2,349 terms), each the page the rule names and each resolving.
+Two things the check met on this box: Chromium's sandbox cannot start here (AppArmor disables unprivileged user
+namespaces on Ubuntu 26.04), so it runs with `--no-sandbox` and a resolver rule that sends every host but
+127.0.0.1 nowhere, so it loads only this site; and 3d-force-graph hangs, rather than failing, on a link to a node
+it was not given, so the graph control plants a consistent graph one node short.
+
+**A ratchet, not yet a gate:** the number shown as source may not exceed each book's ceiling in
+`build/math-ceiling.json` (1,070 in all at b3c614f; Planck raised by 4 for mhchem, with the reason in the file). At b3c614f about 457 equations need the books' own macros, which
+the next export carries; the gate becomes zero, or an explicit per-formula list, once it lands.
+
 ## Full book text (ruled by Michael 2026-10-10)
 
 "Lets not show full project Gutenberg text only the full book text, but link to project Gutenberg. So we
@@ -178,5 +275,10 @@ associates the stripped text with PG. The text has no source yet (pd-books carri
 
 ## Deploy
 
-Static files from this repo through Dokploy on nocix (the nocix seat deploys). Rehearsed on a Linux
+**Before this repo goes public** (Michael's call): `tools/roster.txt` and the planted names in
+`tools/outward.py`'s control list the very names the outward check keeps off the site. They move out of the
+repo (the build reading the list from a private path) or become hashes (each word checked by its sha256), so
+that publishing the code does not publish the list.
+
+Static files from this repo through Dokploy on the hosting server, deployed by its operator. Rehearsed on a Linux
 clone before any deploy request. The repo stays PRIVATE and the site unpublished until Michael says so.
