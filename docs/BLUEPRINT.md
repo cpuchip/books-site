@@ -257,6 +257,11 @@ namespaces on Ubuntu 26.04), so it runs with `--no-sandbox` and a resolver rule 
 127.0.0.1 nowhere, so it loads only this site; and 3d-force-graph hangs, rather than failing, on a link to a node
 it was not given, so the graph control plants a consistent graph one node short.
 
+**Reviewed 2026-10-10:** two fresh-eyes passes on unit 3 reproduced 15 holes (8, then 7). The ones a check from
+outside the code under test can close are red now, by the checks above; the rest are under Known limits (the
+pixels of the graph, our scripts reporting on themselves). (The commit that brought unit 3, 8d1a2eb, says "three
+passes" and "22 holes"; that count was wrong, and this is the true one.)
+
 **A ratchet, not yet a gate:** the number shown as source may not exceed each book's ceiling in
 `build/math-ceiling.json` (1,070 in all at b3c614f; Planck raised by 4 for mhchem, with the reason in the file). At b3c614f about 457 equations need the books' own macros, which
 the next export carries; the gate becomes zero, or an explicit per-formula list, once it lands.
