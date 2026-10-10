@@ -25,6 +25,9 @@ PD_BOOKS = "https://github.com/cpuchip/pd-books"
 LEARN = "https://learn.cpuchip.net/"
 CONCEPT_LAYER = ["book", "person", "chapter", "concept", "method", "theorem", "law", "quantity", "unit",
                  "instrument", "experiment"]
+TERM_GROUPS = [("concept", "Concepts"), ("theorem", "Theorems"), ("method", "Methods"), ("law", "Laws"),
+               ("quantity", "Quantities"), ("unit", "Units"), ("instrument", "Instruments"),
+               ("experiment", "Experiments"), ("person", "People")]
 VERDICTS = {
     "verified": "the printed answer passed a computed check",
     "unverified": "no computed check settled this one (yet)",
@@ -97,9 +100,14 @@ def page(title, body, depth, desc=""):
 """
 
 
-def text(s):
-    """Export markdown is shown as text (LaTeX source kept) until a math renderer is approved."""
-    return f'<span class="tx">{e(s or "")}</span>'
+def field(name, s):
+    """data-field marks a value the oracle compares exactly with the export's (only a non-empty string is one)."""
+    return f' data-field="{name}"' if isinstance(s, str) and s.strip() else ""
+
+
+def text(s, name=None):
+    """Export markdown is shown as text (LaTeX source kept) until the math renderer lands."""
+    return f'<span class="tx"{field(name, s) if name else ""}>{e(s or "")}</span>'
 
 
 def chapter_slug(book_id, chapter_id):
@@ -116,7 +124,7 @@ def scan_links(evidence):
 
 
 def render_problem(p):
-    answers = "".join(f"<li>{text(a)}</li>" for a in p.get("answer_markdown") or []) or "<li>(none printed)</li>"
+    answers = "".join(f"<li>{text(a, 'answer')}</li>" for a in p.get("answer_markdown") or []) or "<li>(none printed)</li>"
     checks = "".join(
         f"<li><code>{e(c['task'])}</code>: {e(CHECK_WORDS.get(c['verdict'], c['verdict']))}"
         + (f" <code>{e(c['answer_expr'])}</code>" if c.get("answer_expr") else "") + "</li>"
@@ -125,14 +133,14 @@ def render_problem(p):
     for k in p.get("keys") or []:
         pins = k.get("core_pins") or {}
         keys += (f'<div class="keys"><p>On the STU-32 ({e(k.get("mode", ""))}, {e(k.get("entry", ""))}):</p>'
-                 + "".join(f"<pre>{e(s)}</pre>" for s in k.get("steps") or [])
+                 + "".join(f"<pre{field('step', s)}>{e(s)}</pre>" for s in k.get("steps") or [])
                  + f'<p>Calculator: <code>{e(k.get("calculator_value", ""))}</code>; the book prints '
                  f'<code>{e(k.get("printed_value", ""))}</code>. Run on the calculator core at firmware '
                  f'<code>{e(str(pins.get("firmware", ""))[:7])}</code>.</p></div>')
     verdict = p.get("verdict") or ""
     return (f'<li class="problem" data-kind="problem" data-id="{e(p["id"])}" id="p-{e(p["id"].split("/", 1)[-1].replace("/", "-"))}">'
             f'<p class="loc">{e(p.get("location") or "")}{", p. " + e(str(p["page"])) if p.get("page") else ""}</p>'
-            + (f'<p>{text(p.get("markdown"))}</p>' if (p.get("markdown") or "").strip()
+            + (f'<p>{text(p.get("markdown"), "text")}</p>' if (p.get("markdown") or "").strip()
                else '<p class="n">The record holds no text for this problem.</p>')
             + f'<div class="ans"><span>Printed answer:</span><ul>{answers}</ul></div>'
             f'<p class="verdict v-{e(verdict)}">{e(verdict)}: {e(VERDICTS.get(verdict, ""))}</p>'
@@ -146,8 +154,9 @@ def render_erratum(x):
     return (f'<li class="erratum" data-kind="erratum" data-id="{e(x["id"])}">'
             f'<p class="loc">{e(x["id"].split("/")[-1])}: {e(x.get("location") or "")}'
             f'{", p. " + e(str(x["page"])) if x.get("page") else ""}</p>'
-            f'<p>Printed: {text(x.get("printed"))}<br>Corrected: {text(x.get("corrected"))}</p>'
-            + (f'<p class="ctx">In the source: <code>{e(x["context"])}</code></p>' if x.get("context") else "")
+            f'<p>Printed: {text(x.get("printed"), "printed")}<br>Corrected: {text(x.get("corrected"), "corrected")}</p>'
+            + (f'<p class="ctx">In the source: <code{field("context", x["context"])}>{e(x["context"])}</code></p>'
+               if x.get("context") else "")
             + (f'<p class="n">{e(x["class"])}</p>' if x.get("class") else "")
             + f'<p class="credit">{e(neutral.credit(x.get("status"), x.get("kind")))}</p>'
             + (f'<p class="ev">{e(ev)}</p>' if ev else "")
@@ -155,7 +164,109 @@ def render_erratum(x):
             + "</li>")
 
 
-def render_book(d, index_entry, pin, generated):
+def term_anchor(node_id):
+    return "t-" + node_id.replace("/", "-")
+
+
+def terms_of(graph, books):
+    """{book: {node: [chapter ids]}} from the graph's taught_in links to chapters that are part_of a book.
+    Refuses an export whose graph places a chapter in another book than the book file does, or whose taught_in
+    starts at a node that is not a term type."""
+    kind = {n["id"]: n["type"] for n in graph["nodes"]}
+    book_of = {l["source"]: l["target"] for l in graph["links"]
+               if l["type"] == "part_of" and kind.get(l["source"]) == "chapter"}
+    files = {c["id"]: d["book"]["id"] for d in books for c in d["chapters"]}
+    for c, b in book_of.items():
+        if c in files and files[c] != b:
+            refuse(f"graph.json says {c} is part_of {b}; its book file is {files[c]}")
+    types = {t for t, _ in TERM_GROUPS}
+    out = {}
+    for l in graph["links"]:
+        if l["type"] == "taught_in" and kind.get(l["source"]) not in types:
+            refuse(f"graph.json: {l['source']} ({kind.get(l['source'])}) is taught_in {l['target']}; "
+                   f"terms are {sorted(types)}")
+        if l["type"] == "taught_in" and l["target"] in book_of:
+            chs = out.setdefault(book_of[l["target"]], {}).setdefault(l["source"], [])
+            if l["target"] not in chs:
+                chs.append(l["target"])
+    for b, terms in out.items():
+        anchors = [term_anchor(n) for n in terms]
+        if len(set(anchors)) != len(anchors):
+            refuse(f"two terms of {b} share an anchor")
+    return out
+
+
+def check_relations(relations, titles):
+    seen = set()
+    for r in relations:
+        pair = tuple(sorted(r.get("books") or []))
+        if len(pair) != 2 or pair[0] == pair[1] or not set(pair) <= set(titles):
+            refuse(f"books.json relation {r.get('books')} does not name two books of the shelf")
+        if pair in seen:
+            refuse(f"books.json relates {pair[0]} and {pair[1]} twice")
+        seen.add(pair)
+
+
+def render_relations(d, relations, names, titles, terms):
+    bid = d["book"]["id"]
+    mine = sorted(((r, next(o for o in r["books"] if o != bid)) for r in relations if bid in r["books"]),
+                  key=lambda ro: (-len(ro[0].get("shared_concepts") or []), titles[ro[1]]["title"]))
+    items = ""
+    for r, o in mine:
+        shared = r.get("shared_concepts") or []
+        names_html = ", ".join(
+            (f'<a href="terms/index.html#{e(term_anchor(n))}">{e(names.get(n) or n)}</a>' if n in terms
+             else f'<span>{e(names.get(n) or n)}</span>') for n in shared)
+        t = titles[o]
+        items += (f'<li class="relation" data-kind="relation" data-id="{e(bid)}~{e(o)}">'
+                  f'<a href="../{e(o)}/index.html">{e(t["title"])}</a> <span class="by">{e(str(t.get("year", "")))}</span>'
+                  + (f'<details><summary><span data-count="shared">{len(shared)}</span> shared '
+                     f'{"term" if len(shared) == 1 else "terms"}</summary><p class="shared">{names_html}</p></details>'
+                     if shared else f'<p class="n"><span data-count="shared">0</span> shared terms recorded.</p>')
+                  + "</li>")
+    return (f'<section><h2>Related books</h2><p class="n">The books the concept graph relates to this one, most shared '
+            f'terms first.</p><ul class="relations">{items}</ul></section>' if items
+            else '<section><h2>Related books</h2><p>None on this shelf yet.</p></section>')
+
+
+def render_terms(d, terms, names, kinds, teaching, titles):
+    b = d["book"]
+    bid = b["id"]
+    order = {c["id"]: k for k, c in enumerate(d["chapters"])}
+    chapter = {c["id"]: c for c in d["chapters"]}
+    groups, jump = "", []
+    for t, heading in TERM_GROUPS:
+        ids = sorted((n for n in terms if kinds.get(n) == t), key=lambda n: ((names.get(n) or n).casefold(), n))
+        if not ids:
+            continue
+        rows = ""
+        for n in ids:
+            chs = sorted(terms[n], key=lambda c: order.get(c, len(order)))
+            where = ", ".join(
+                f'<a href="../ch/{e(chapter_slug(bid, c))}/index.html">'
+                f'{e((chapter.get(c) or {}).get("title") or (chapter.get(c) or {}).get("number") or chapter_slug(bid, c))}</a>'
+                for c in chs)
+            others = sorted(teaching.get(n, set()) - {bid}, key=lambda o: titles[o]["title"])
+            also = ", ".join(f'<a href="../../{e(o)}/terms/index.html#{e(term_anchor(n))}">{e(titles[o]["title"])}</a>'
+                             for o in others)
+            rows += (f'<li class="term" data-kind="term" data-id="{e(bid)}|{e(n)}" id="{e(term_anchor(n))}">'
+                     f'<span class="tn">{e(names.get(n) or n)}</span>'
+                     f'<p class="n">Taught in: {where}</p>'
+                     + (f'<p class="n">Also in: {also}</p>' if also else "") + "</li>")
+        groups += (f'<section data-group="{e(t)}" id="g-{e(t)}"><h2>{e(heading)} '
+                   f'(<span data-count="group">{len(ids)}</span>)</h2><ul class="terms">{rows}</ul>'
+                   f'<p class="n"><a href="#top">Back to the top</a></p></section>')
+        jump.append(f'<a href="#g-{e(t)}">{e(heading)}</a>')
+    body = f"""<p class="crumb"><a href="../index.html">{e(b['title'])}</a></p>
+<h1 id="top">Index of terms</h1>
+<p class="lede">Every concept, theorem, method and person the concept graph places in a chapter of this book,
+with the chapters that teach it and the other books on the shelf that teach it too.</p>
+{'<nav class="jump" aria-label="Term groups">' + ' '.join(jump) + '</nav>' if jump else ''}
+{groups or '<p>The graph places no terms in this book yet.</p>'}"""
+    return page(f"Index of terms: {b['title']}", body, 3, f"The terms taught in {b['title']}, by chapter")
+
+
+def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     b = d["book"]
     bid = b["id"]
     t = b.get("transcription") or {}
@@ -187,7 +298,10 @@ The transcription's licence, as it states it:</p>
 <p>This site quotes excerpts and problems from that transcription and hosts no scans; scans are linked to
 their archive. The records below (problems, checks, errata) are from <a href="{e(data_url)}">pd-books at
 {e(pin[:7])}</a>, dedicated to the public domain (CC0), export generated {e(generated)}.</p></section>
-<section><h2>Chapters</h2><ol class="chapters">{chapters}</ol></section>
+<section><h2>Chapters</h2><ol class="chapters">{chapters}</ol>
+<p><a href="terms/index.html">Index of terms</a> <span class="n"><span data-count="terms">{n_terms}</span>
+{"term" if n_terms == 1 else "terms"}, by chapter</span></p></section>
+{related}
 <section><h2>Errata ({len(d.get('errata') or [])})</h2>
 {'<ul class="errata">' + errata + '</ul>' if errata else '<p>None recorded yet.</p>'}</section>
 {'<section><h2>Elsewhere in the book</h2><ul>' + loose + '</ul>' + loose_sets + '</section>' if loose or loose_sets else ''}"""
@@ -196,12 +310,13 @@ their archive. The records below (problems, checks, errata) are from <a href="{e
 
 def render_excerpt(x):
     return (f'<li class="excerpt" data-kind="excerpt" data-id="{e(x["id"])}" id="{e(anchor(x["id"]))}"><p class="loc">{e(x.get("location") or "")}</p>'
-            f'<blockquote>{text(x.get("markdown"))}</blockquote></li>')
+            f'<blockquote>{text(x.get("markdown"), "text")}</blockquote></li>')
 
 
 def render_equation(x):
     return (f'<li class="equation" data-kind="equation" data-id="{e(x["id"])}" id="{e(anchor(x["id"]))}"><p class="loc">{e(x.get("location") or "")}</p>'
-            f'<p><code>{e(x.get("latex") or "")}</code></p><p>{text(x.get("statement"))}</p></li>')
+            f'<p><code{field("latex", x.get("latex"))}>{e(x.get("latex") or "")}</code></p>'
+            + (f'<p>{text(x.get("statement"), "statement")}</p>' if (x.get("statement") or "").strip() else "") + "</li>")
 
 
 def anchor(i):
@@ -306,9 +421,21 @@ def build(export, out, pin, pd_books_check=True):
         shutil.copy(HERE / "site.css", dist / "site.css")
         w("index.html", render_shelf(index, books))
         w("about/index.html", render_about(pin))
+        all_terms = terms_of(graph, books)
+        check_relations(index.get("relations") or [], entries)
+        names = {n["id"]: n.get("name") or "" for n in graph["nodes"]}
+        kinds = {n["id"]: n["type"] for n in graph["nodes"]}
+        teaching = {}
+        for b, terms in all_terms.items():
+            for n in terms:
+                teaching.setdefault(n, set()).add(b)
+        relations = index.get("relations") or []
         for d in books:
             bid = d["book"]["id"]
-            w(f"books/{bid}/index.html", render_book(d, entries[bid], pin, generated))
+            terms = all_terms.get(bid, {})
+            related = render_relations(d, relations, names, entries, terms)
+            w(f"books/{bid}/index.html", render_book(d, entries[bid], pin, generated, related, len(terms)))
+            w(f"books/{bid}/terms/index.html", render_terms(d, terms, names, kinds, teaching, entries))
             for c in d["chapters"]:
                 w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c))
         g = compact_graph(graph)

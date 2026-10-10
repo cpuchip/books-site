@@ -5,8 +5,8 @@
 #   PD_BOOKS=/path sh build.sh [OUT]     use a local pd-books checkout (its HEAD must equal the pin)
 #   OFFLINE=1 ...                        skip external link requests (development only; says so)
 #
-# Order: pd-books' own export check (inside site.py) -> build into a staging dir -> the oracle with its two
-# planted controls -> links -> outward -> graph. OUT is replaced only when every check is green.
+# Order: pd-books' own export check (inside site.py) -> build into a staging dir -> the oracle with its
+# planted controls (34, docs/BLUEPRINT.md) -> links -> outward -> graph. OUT is replaced only when every check is green.
 set -eu
 cd "$(dirname "$0")"
 OUT=${1:-dist}

@@ -29,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CLAUDE = re.compile(r"claude\.ai|Claude-Session", re.I)
-EM = "—"
+EM = "\u2014"
 TEXT_FILES = {".json", ".css", ".js", ".mjs", ".txt", ".svg", ".xml"}
 
 
@@ -147,12 +147,21 @@ def control(export, dist):
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "dist"
         shutil.copytree(dist, copy)
-        book = next(p for p in sorted((copy / "books").glob("*/index.html")) if 'class="ev"' in p.read_text(encoding="utf-8"))
-        t = book.read_text(encoding="utf-8")
-        t = t.replace('<p class="ev">', '<p class="ev">settled by qwenniverse-fermion-check. ', 1)
-        t = t.replace('<p class="n">', '<p class="n">caught in the tutor run, ', 1)
-        t = t.replace("Corrected: <span class=\"tx\">", f"Corrected: <span class=\"tx\">{EM} ", 1)
-        t = t.replace("</main>", '<a href="https://claude.ai/chat/x">x</a></main>', 1)
+        # an erratum with an evidence line and a class line, so each plant lands where its name says
+        book, t, m = next((p, t, m) for p in sorted((copy / "books").glob("*/index.html"))
+                          for t in [p.read_text(encoding="utf-8")]
+                          for m in [re.search(r'<li class="erratum".*?</li>', t, re.S)]
+                          if m and 'class="ev"' in m.group(0) and '<p class="n">' in m.group(0))
+        el = m.group(0)
+
+        def plant(s, pattern, insert):
+            n = re.subn(pattern, lambda x: x.group(0) + insert, s, count=1)
+            assert n[1] == 1, f"outward control: {pattern!r} did not land"
+            return n[0]
+        el = plant(el, r'<p class="ev">', "settled by qwenniverse-fermion-check. ")
+        el = plant(el, r'<p class="n">', "caught in the tutor run, ")
+        el = plant(el, r'Corrected: <span class="tx"[^>]*>', f"{EM} ")
+        t = plant(t[:m.start()] + el + t[m.end():], r'<main>', '<a href="https://claude.ai/chat/x">x</a>')
         book.write_text(t, encoding="utf-8")
         gpath = copy / "graph" / "graph.json"
         g = json.loads(gpath.read_text(encoding="utf-8"))
