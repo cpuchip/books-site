@@ -132,8 +132,9 @@ def render_problem(p):
     verdict = p.get("verdict") or ""
     return (f'<li class="problem" data-kind="problem" data-id="{e(p["id"])}" id="p-{e(p["id"].split("/", 1)[-1].replace("/", "-"))}">'
             f'<p class="loc">{e(p.get("location") or "")}{", p. " + e(str(p["page"])) if p.get("page") else ""}</p>'
-            f'<p>{text(p.get("markdown"))}</p>'
-            f'<div class="ans"><span>Printed answer:</span><ul>{answers}</ul></div>'
+            + (f'<p>{text(p.get("markdown"))}</p>' if (p.get("markdown") or "").strip()
+               else '<p class="n">The record holds no text for this problem.</p>')
+            + f'<div class="ans"><span>Printed answer:</span><ul>{answers}</ul></div>'
             f'<p class="verdict v-{e(verdict)}">{e(verdict)}: {e(VERDICTS.get(verdict, ""))}</p>'
             + (f'<details><summary>How it was checked</summary><ul>{checks}</ul></details>' if checks else "")
             + keys + "</li>")
@@ -170,7 +171,10 @@ def render_book(d, index_entry, pin, generated):
     listed_s = {i for c in d["chapters"] for i in c["exercise_sets"]}
     loose = ("".join(render_excerpt(x) for x in d["excerpts"] if x["id"] not in listed_x)
              + "".join(render_equation(x) for x in d["equations"] if x["id"] not in listed_q)
-             + "".join(render_problem(p) for p in d["problems"] if p.get("set") not in listed_s))
+             + "".join(render_problem(p) for p in d["problems"]
+                       if p.get("set") not in listed_s and p.get("set") not in {x["id"] for x in d["exercise_sets"]}))
+    loose_sets = "".join(render_set(x, [p for p in d["problems"] if p.get("set") == x["id"]])
+                         for x in d["exercise_sets"] if x["id"] not in listed_s)
     # raw.githubusercontent, not a /blob/ page: GitHub's blob view 503s/429s unauthenticated checkers
     # (measured from lepton 2026-10-10, every repo), so the link check could never confirm a blob link.
     data_url = f"https://raw.githubusercontent.com/cpuchip/pd-books/{pin}/export/{index_entry['file']}"
@@ -186,7 +190,7 @@ their archive. The records below (problems, checks, errata) are from <a href="{e
 <section><h2>Chapters</h2><ol class="chapters">{chapters}</ol></section>
 <section><h2>Errata ({len(d.get('errata') or [])})</h2>
 {'<ul class="errata">' + errata + '</ul>' if errata else '<p>None recorded yet.</p>'}</section>
-{'<section><h2>Elsewhere in the book</h2><ul>' + loose + '</ul></section>' if loose else ''}"""
+{'<section><h2>Elsewhere in the book</h2><ul>' + loose + '</ul>' + loose_sets + '</section>' if loose or loose_sets else ''}"""
     return page(b["title"], body, 2, f"{b['title']} ({b.get('year')}): provenance, chapters, problems and errata")
 
 
@@ -209,8 +213,20 @@ def elsewhere(d, x, what):
     bid = d["book"]["id"]
     home = next((c for c in d["chapters"] if c["id"] == x.get("chapter")), None)
     name = (home or {}).get("title") or x.get("chapter") or ""
-    href = f"../{e(chapter_slug(bid, home['id']))}/index.html#{e(anchor(x['id']))}" if home else "#"
+    if not home:
+        return f'<li class="{what} ref">This {what} is listed here; its own chapter is not in the data.</li>'
+    href = f"../{e(chapter_slug(bid, home['id']))}/index.html#{e(anchor(x['id']))}"
     return f'<li class="{what} ref"><a href="{href}">This {what} is in {e(name)}</a> ({e(x.get("location") or "")})</li>'
+
+
+def render_set(s, problems):
+    items = "".join(render_problem(p) for p in problems)
+    label = e(str(s.get("set")))
+    return (f'<section class="set" data-kind="exercise_set" data-id="{e(s["id"])}" id="set-{label}">'
+            f'<h3>Exercise {label}</h3>'
+            + (f'<ol class="problems">{items}</ol>' if items
+               else '<p class="n">The data holds no problems for this exercise yet.</p>')
+            + "</section>")
 
 
 def render_chapter(d, c):
@@ -222,17 +238,14 @@ def render_chapter(d, c):
         probs.setdefault(p.get("set"), []).append(p)
     sections = ""
     for sid in c["exercise_sets"]:
-        s = sets.get(sid, {"set": sid})
-        items = "".join(render_problem(p) for p in probs.get(sid, []))
-        sections += (f'<section class="set" id="set-{e(str(s.get("set")))}"><h3>Exercise {e(str(s.get("set")))}</h3>'
-                     f'<ol class="problems">{items}</ol></section>')
+        sections += render_set(sets.get(sid, {"id": sid, "set": sid}), probs.get(sid, []))
     b = d["book"]
     body = f"""<p class="crumb"><a href="../../index.html">{e(b['title'])}</a></p>
 <h1>{e(c.get('title') or c.get('number') or '')}</h1>
 <section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i]) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
 <section><h2>Equations</h2><ul class="equations">{''.join((render_equation(by_id_q[i]) if by_id_q[i].get("chapter") == c["id"] else elsewhere(d, by_id_q[i], "equation")) for i in c['equations'] if i in by_id_q)}</ul></section>
 <section><h2>Problems</h2>{sections or '<p>No exercises in this chapter.</p>'}</section>"""
-    return page(f"{c.get('title') or ''}: {b['title']}", body, 4)
+    return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4)
 
 
 def render_shelf(index, books):

@@ -44,24 +44,45 @@ keys), 135 errata, graph 19,904 nodes and 58,517 links.
   (pd-books' evidence crops stay in pd-books, linked). No Project Gutenberg text beyond the excerpts
   the export already carries, unless Michael rules otherwise.
 
-## The oracle (each check has a planted fault seen red)
+## The oracle (each check plants its own faults on every run and must see them red first)
 
-1. **Counts, both sides.** `tools/oracle.py EXPORT DIST` reads the export (its own JSON walk, no
-   code shared with the build) and the built HTML (html.parser over every page, collecting
-   `data-kind`/`data-id`), and compares id sets per kind: book, chapter, problem, erratum. Missing,
-   extra and duplicated ids are all failures, each listed by id. The control (`--control`) copies the
-   fresh dist to a temp directory, deletes one problem element chosen by seed, and must come back red
-   naming exactly that id; a second control drops a problem from a copy of the export and builds it,
-   and the oracle against the true export must name it. The match is reported only after both reds.
-2. **Links.** `tools/linkcheck.py DIST` resolves every internal href and src to a file in dist, and
-   every external URL (sources, scans, learn.cpuchip.net) by a request, with `--offline` for
-   development only. Control: a planted broken internal link goes red.
-3. **Graph.** The graph data file's node and link counts equal graph.json's (in the build). In the Linux
-   rehearsal, a headless browser loads `/graph/` and reads the counts the library holds after load;
-   they must equal the export's. Control: a graph file with one link removed goes red.
-4. **Outward.** `tools/outward.py DIST` flags any roster seat name, em-dash or session URL in rendered
-   text. A roster name passes only where the same string is book text from the export (Thompson writes
-   "tutor"). Control: a planted seat name goes red.
+1. **Every unit, once, on its page, with its text.** `tools/oracle.py EXPORT DIST` reads the export with its
+   own walk (nothing imported from the build) and every `data-kind`/`data-id` element of the built HTML with the
+   text inside it. Kinds: book, chapter, exercise_set, excerpt, equation, problem, erratum. Per unit:
+   presence (exactly as many times as the export holds it), placement (the URL contract below), content (the
+   problem's text, each printed answer and each key's steps; the excerpt's text; the equation's LaTeX; the
+   erratum's printed and corrected text and context, and at least one evidence sentence verbatim, since the
+   rest may be rewritten for readers; the titles). Seven controls: delete a problem, delete an erratum,
+   duplicate an erratum, blank a problem's text, drop an erratum's evidence, move a problem to the wrong page,
+   and drop a problem from a copy of the export and rebuild. Each must come back with exactly its planted
+   finding.
+2. **Links.** `tools/linkcheck.py DIST`: every internal href and src names a file (and fragment) in dist; an
+   empty href or a bare `#` fails; every page is reachable from the shelf; every external URL answers 2xx/3xx
+   (`--offline` for development only, and the build's last line says so). Controls: a missing file, a missing
+   fragment, an empty link, an orphan page.
+3. **Graph.** `tools/graphcheck.py`: the site's graph file holds every node (id, type, name) and link (source,
+   target, type) of graph.json and states the same counts. Controls: a renamed node; a removed node and link.
+   The browser half (the 3D view holds those counts after load) waits on the library ruling.
+4. **Outward.** `tools/outward.py`: every text node and attribute of every page, every served text file, and
+   every graph node name. Exempt only: text quoted from the book (problem text and answers, excerpts, equation
+   LaTeX, an erratum's printed text and source context, titles, the licence sentence) and the exact strings in
+   `tools/outward-allow.txt`. Fails on any roster name (`tools/roster.txt`), an em-dash, any claude.ai link.
+   Controls: seat names in an erratum class, in evidence (hyphenated) and in a graph node; an em-dash in a
+   correction; a claude.ai link.
+
+**URL contract** (the oracle's placement check reads it from this list, not from the build):
+`index.html` lists books; `books/<book>/index.html` holds the book's chapters list and errata;
+`books/<book>/ch/<chapter id without the book prefix>/index.html` holds the exercise sets, excerpts and
+equations whose `chapter` field names that chapter, and the problems of those sets. Anything whose chapter is
+not in the book goes on the book page.
+
+**Known limits** (reviewed 2026-10-10 by a fresh-eyes pass, which found five false greens in the first
+version, all now red under the checks above):
+- Fields the site does not render are not checked: equation `name`/`symbols`, `answer_latex`, `judge_why`,
+  `relations`, key provenance beyond the firmware pin. Rendering one of them means adding it to the oracle.
+- An element hidden by markup (`hidden`, `<template>`) would count as present; the build emits neither.
+- linkcheck reads href and src only; the build emits no srcset, poster, action or CSS url().
+- A redirect counts as an answer (an archive.org item that is gone returns a real 404, checked).
 
 ## The 3D prototype (2026-10-10, thrown away; screenshots in docs/evidence/)
 

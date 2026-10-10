@@ -3,10 +3,12 @@
     python3 tools/linkcheck.py DIST [--offline] [--control]
 
 Internal: every href/src that is not absolute must name a file in DIST (a directory link needs its
-index.html), and a #fragment must be an id on that page. External: every http(s) URL is requested once
+index.html), a #fragment must be an id on that page, an empty href or a bare "#" fails, and every page
+must be reachable from index.html. External: every http(s) URL is requested once
 (HEAD, then GET when a server refuses HEAD) and must answer 2xx or 3xx. --offline skips the external half
 and says so; the build that deploys never passes it.
---control plants a broken internal link and a broken fragment in a copy of DIST and requires both red.
+--control plants a missing file, a missing fragment, an empty link and an orphan page in a copy of DIST and
+requires all four red.
 """
 import argparse
 import shutil
@@ -44,7 +46,7 @@ def scan(dist):
 
 def internal(dist, pages):
     dist = Path(dist).resolve()
-    bad, external = [], set()
+    bad, external, reached = [], set(), {}
     for page, h in pages.items():
         for link in h.links:
             if urlsplit(link).scheme in ("http", "https"):
@@ -52,6 +54,9 @@ def internal(dist, pages):
                 continue
             if urlsplit(link).scheme or link.startswith("//"):
                 bad.append((page, link, "scheme not allowed"))
+                continue
+            if link.strip() in ("", "#"):
+                bad.append((page, link, "empty link"))
                 continue
             path, frag = urldefrag(link)
             target = page if not path else (page.parent / unquote(path)).resolve()
@@ -63,6 +68,19 @@ def internal(dist, pages):
                 bad.append((page, link, "no such file"))
             elif frag and target.suffix == ".html" and frag not in pages[target].ids:
                 bad.append((page, link, f"no id {frag!r} on the page"))
+            elif target.suffix == ".html":
+                reached.setdefault(page, set()).add(target)
+    # every page must be reachable from the shelf by internal links (an orphan page is content nobody finds)
+    start = dist / "index.html"
+    seen, todo = {start}, [start]
+    while todo:
+        for t in reached.get(todo.pop(), ()):
+            if t not in seen:
+                seen.add(t)
+                todo.append(t)
+    for page in pages:
+        if page not in seen:
+            bad.append((page, "(no link reaches this page)", "orphan page"))
     return bad, external
 
 
@@ -107,13 +125,15 @@ def main():
             idx = copy / "index.html"
             idx.write_text(idx.read_text(encoding="utf-8").replace(
                 "</main>", '<a href="books/no-such-book/index.html">x</a>'
-                           '<a href="about/index.html#no-such-id">y</a></main>', 1), encoding="utf-8")
+                           '<a href="about/index.html#no-such-id">y</a><a href="">z</a></main>', 1), encoding="utf-8")
+            (copy / "orphan").mkdir()
+            (copy / "orphan" / "index.html").write_text("<p>nobody links here</p>", encoding="utf-8")
             _, bad, _, _ = run(copy, offline=True)
             got = sorted(link for _, link, _ in bad)
-            if got != ["about/index.html#no-such-id", "books/no-such-book/index.html"]:
+            if got != ["", "(no link reaches this page)", "about/index.html#no-such-id", "books/no-such-book/index.html"]:
                 print(f"LINK CONTROL FAILED: planted two broken links, checker said {got[:5]}")
                 sys.exit(2)
-            print("link control: RED as planted (a missing file and a missing fragment)")
+            print("link control: RED as planted (a missing file, a missing fragment, an empty link, an orphan page)")
     pages, bad, external, ext_bad = run(a.dist, a.offline)
     n = sum(len(h.links) for h in pages.values())
     print(f"links: {n} on {len(pages)} pages; {len(external)} distinct external"

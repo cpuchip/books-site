@@ -36,4 +36,4 @@ python3 tools/graphcheck.py "$SRC/export" "$STAGE" --control
 
 rm -rf "$OUT"
 mv "$STAGE" "$OUT"
-echo "SITE GREEN: $OUT from pd-books $PIN"
+echo "SITE GREEN: $OUT from pd-books $PIN${OFFLINE:+ (OFFLINE: external links NOT requested)}"

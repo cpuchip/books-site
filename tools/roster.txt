@@ -1,6 +1,9 @@
 # Seat and instance names the site must never print. Taken from the chillacks roster 2026-10-10, plus the
-# pipeline instance names. Refresh by hand when seats are minted. A name in [common] is an ordinary word too,
-# so outward.py checks it only inside credit and evidence text, where seat credits used to be.
+# pipeline instance names. Refresh by hand when seats are minted. outward.py checks every name in both groups
+# in all text the site or the pipeline wrote; [common] only marks the ones that are ordinary words too, whose
+# genuine uses in book text are listed one by one in outward-allow.txt.
+# Not listed: "books", this seat's working name, which is also the site's subject; the site cannot avoid
+# the word, so checking it would only ever be noise.
 [distinct]
 workspace-basecamp
 basecamp
@@ -26,7 +29,6 @@ hmi
 ewb
 arcade
 [common]
-books
 tutor
 primer
 church

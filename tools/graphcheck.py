@@ -2,7 +2,7 @@
 
     python3 tools/graphcheck.py EXPORT DIST [--control]
 
-Compares node ids (with type) and links (source, target, type) as multisets, after decoding the site's
+Compares nodes (id, type and name, which the 3D view draws) and links (source, target, type) as multisets, after decoding the site's
 compact form, and checks that the counts the file states equal what it holds. The browser half (the 3D view
 renders those counts) runs in the Linux rehearsal once the graph library is approved.
 --control removes one link and one node from a copy of the site file and requires both named red.
@@ -16,13 +16,13 @@ from pathlib import Path
 
 def export_graph(export):
     g = json.loads((Path(export) / "graph.json").read_text(encoding="utf-8"))
-    return Counter((n["id"], n["type"]) for n in g["nodes"]), Counter((l["source"], l["target"], l["type"]) for l in g["links"])
+    return Counter((n["id"], n["type"], n.get("name") or "") for n in g["nodes"]), Counter((l["source"], l["target"], l["type"]) for l in g["links"])
 
 
 def site_graph(s):
     nt, et = s["node_types"], s["edge_types"]
     ids = [n[0] for n in s["nodes"]]
-    nodes = Counter((n[0], nt[n[1]]) for n in s["nodes"])
+    nodes = Counter((n[0], nt[n[1]], n[2]) for n in s["nodes"])
     links = Counter((ids[a], ids[b], et[t]) for a, b, t in s["links"])
     stated = s.get("counts") or {}
     errs = []
@@ -50,6 +50,11 @@ def main():
     exp = export_graph(a.export)
     s = json.loads((Path(a.dist) / "graph" / "graph.json").read_text(encoding="utf-8"))
     if a.control:
+        r = json.loads(json.dumps(s))
+        r["nodes"][1][2] = r["nodes"][1][2] + " (renamed)"
+        if not any(e.startswith(f"node ('{r['nodes'][1][0]}'") for e in compare(exp, site_graph(r))):
+            print("GRAPH CONTROL FAILED: a renamed node passed")
+            sys.exit(2)
         t = json.loads(json.dumps(s))
         gone_link = t["links"].pop(len(t["links"]) // 2)
         gone_node = t["nodes"][-1][0]
@@ -61,7 +66,7 @@ def main():
         if not named:
             print(f"GRAPH CONTROL FAILED: removed node {gone_node} and a link, checker said {errs[:4]}")
             sys.exit(2)
-        print(f"graph control: RED as planted ({len(errs)} differences, the removed node and link named)")
+        print(f"graph control: RED as planted (a renamed node; a removed node and link, {len(errs)} differences, named)")
     errs = compare(exp, site_graph(s))
     print(f"graph: export {sum(exp[0].values())} nodes / {sum(exp[1].values())} links; "
           f"site file {len(s['nodes'])} / {len(s['links'])}")

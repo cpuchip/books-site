@@ -1,0 +1,6 @@
+# Exact strings (whitespace collapsed) that contain a roster word as the books' own language, outside the
+# fields outward.py already treats as quoted book text. One per line; each was read before it was added.
+# graph.json concept named in Ball, Mathematical Recreations (1905): the spin of a ball in flight
+spin of a ball
+# graph.json excerpt name, quoting Thompson, Calculus Made Easy (1914), p. 145
+Thompson 1914, p. 145: For the benefit of those who have no tutor ...
