@@ -1,0 +1,44 @@
+:root {
+  --bg: #fbfaf7; --fg: #1d1c1a; --muted: #6a675f; --rule: #dedad0; --accent: #2f5d8a;
+  --ok: #2e6b3a; --warn: #8a5a12; --code-bg: #f1eee6;
+  --measure: 46rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161614; --fg: #e8e5dd; --muted: #a29e93; --rule: #34322d; --accent: #8db6dc;
+    --ok: #8fc79a; --warn: #e0b56a; --code-bg: #23221f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161614; --fg: #e8e5dd; --muted: #a29e93; --rule: #34322d; --accent: #8db6dc;
+  --ok: #8fc79a; --warn: #e0b56a; --code-bg: #23221f;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 Georgia, "Iowan Old Style", serif; }
+a { color: var(--accent); }
+.top, main, .foot { max-width: var(--measure); margin: 0 auto; padding: 0 16px; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding-top: 1rem;
+  border-bottom: 1px solid var(--rule); padding-bottom: .6rem; font-family: system-ui, sans-serif; font-size: .95rem; }
+.top nav a { margin-left: 1rem; }
+.brand { font-weight: 600; text-decoration: none; color: var(--fg); }
+h1 { font-size: 1.9rem; line-height: 1.2; margin: 1.6rem 0 .4rem; }
+h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid var(--rule); padding-bottom: .2rem; }
+h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+.by, .n, .loc, .crumb, .credit { color: var(--muted); font-size: .9rem; }
+.loc { margin: 0 0 .2rem; font-family: system-ui, sans-serif; }
+ul.shelf, ol.chapters, ul.errata, ul.excerpts, ul.equations, ol.problems { padding-left: 1.2rem; }
+li { margin: .5rem 0; }
+li.problem, li.erratum, li.excerpt, li.equation { margin: 1rem 0; overflow-wrap: anywhere; }
+.tx { white-space: pre-wrap; }
+blockquote { margin: .4rem 0; padding-left: .8rem; border-left: 3px solid var(--rule); }
+code, pre { font: .88rem/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-bg); }
+code { padding: 0 .2rem; }
+pre { padding: .4rem .6rem; overflow-x: auto; }
+.ans ul { margin: .2rem 0; }
+.verdict { font-family: system-ui, sans-serif; font-size: .88rem; margin: .2rem 0; }
+.v-verified { color: var(--ok); }
+.v-unverified { color: var(--warn); }
+.keys { border-left: 3px solid var(--accent); padding-left: .7rem; margin-top: .4rem; }
+details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
+.foot { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: .6rem; padding-bottom: 2rem;
+  color: var(--muted); font-size: .85rem; font-family: system-ui, sans-serif; }

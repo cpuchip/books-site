@@ -1,0 +1,36 @@
+# Seat and instance names the site must never print. Taken from the chillacks roster 2026-10-10, plus the
+# pipeline instance names. Refresh by hand when seats are minted. A name in [common] is an ordinary word too,
+# so outward.py checks it only inside credit and evidence text, where seat credits used to be.
+[distinct]
+workspace-basecamp
+basecamp
+qwenniverse-fermion
+qwenniverse
+claudiverse
+threadchip
+quartermaster
+shipwright
+engine-probe
+job-hunt
+job-prep
+perihex
+nocix
+soroban
+casim
+abacus
+draftsman
+lepton
+fermion
+vllm
+hmi
+ewb
+arcade
+[common]
+books
+tutor
+primer
+church
+scriptures
+codex
+spin
+tally
