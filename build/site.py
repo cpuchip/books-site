@@ -78,13 +78,17 @@ def load(export, pd_books_check):
 
 MATH_CSS = ["vendor/katex/katex.min.css"]
 MATH_JS = ["vendor/katex/katex.min.js", "vendor/katex/contrib/auto-render.min.js", "site.js"]
+CHEM_JS = "vendor/katex/contrib/mhchem.min.js"  # KaTeX's \ce and \pu (Apache-2.0); only on pages that use them
 
 
 def page(title, body, depth, desc="", math=None, scripts=()):
     """math: None for a page without math, else the book's macros (a dict) for KaTeX."""
     up = "../" * depth
     css = "".join(f'\n<link rel="stylesheet" href="{up}{c}">' for c in (MATH_CSS if math is not None else []))
-    js = "".join(f'\n<script src="{up}{j}"></script>' for j in (MATH_JS if math is not None else []) + list(scripts))
+    mjs = MATH_JS if math is not None else []
+    if mjs and ("\\ce{" in body or "\\pu{" in body):
+        mjs = mjs[:1] + [CHEM_JS] + mjs[1:]  # after katex.min.js, which it extends
+    js = "".join(f'\n<script src="{up}{j}"></script>' for j in mjs + list(scripts))
     main_attrs = f" data-macros=\"{e(json.dumps(math, ensure_ascii=False, sort_keys=True))}\"" if math else ""
     report = ('\n<p class="n">Math: <output id="math-report">not typeset (scripts are off)</output></p>'
               if math is not None else "")

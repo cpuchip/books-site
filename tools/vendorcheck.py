@@ -23,7 +23,7 @@ from pathlib import Path
 
 META = {"SOURCES.json", "THIRD-PARTY-NOTICES.txt"}
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from vendor import INTRO, PACKAGES  # noqa: E402  the pins: SOURCES.json must be exactly these releases
+from vendor import INTRO, PACKAGES, PARTS, part_notice, source_header  # noqa: E402  the pins and the parts
 
 
 def check(dist, offline):
@@ -58,6 +58,17 @@ def check(dist, offline):
     want = [(name, pkg["version"], pkg.get("licence"), pkg.get("licence_sha256")) for name, pkg in sources.items()]
     want += [(b["name"], b["version"], b["licence"], b["licence_sha256"])
              for pkg in sources.values() for b in pkg.get("bundles", [])]
+    # a part under a licence of its own (mhchem): exactly the parts tools/vendor.py names, each over files of its
+    # package, each with its own notice
+    parts = [(name, x) for name, pkg in sources.items() for x in pkg.get("parts", [])]
+    if sorted(x["name"] for _, x in parts) != sorted(f"{pkg}/{part}" for pkg, part, *_ in PARTS):
+        bad.append(f"parts {sorted(x['name'] for _, x in parts)}, tools/vendor.py names "
+                   f"{sorted(f'{pkg}/{part}' for pkg, part, *_ in PARTS)}")
+    for name, x in parts:
+        for f in x["files"]:
+            if f not in sources[name]["files"]:
+                bad.append(f"{x['name']}: its file {f} is not one of {name}'s")
+        want.append((x["name"], x["version"], x["licence"], x["licence_sha256"]))
     for name, version, licence, sha in want:
         found = sections.get((name, version), [])
         if not found:
@@ -90,6 +101,12 @@ def check(dist, offline):
             for f, h in pkg["files"].items():
                 if upstream.get(f) != h:
                     bad.append(f"{f}: not byte-identical to {name}@{pkg['version']}")
+            for x in pkg.get("parts", []):
+                header = source_header(tar.extractfile(f"package/{x['header_from']}").read())
+                text = part_notice(header, urllib.request.urlopen(x["licence_url"], timeout=60).read())
+                if hashlib.sha256(text.encode("utf-8")).hexdigest() != x["licence_sha256"]:
+                    bad.append(f"{x['name']}: its header in the tarball and the licence at {x['licence_url']} are not "
+                               "what its notice carries")
         for b in [x for pkg in sources.values() for x in pkg.get("bundles", [])]:
             algo, want_i = b["integrity"].split("-", 1)
             data = urllib.request.urlopen(b["tarball"], timeout=60).read()
@@ -124,6 +141,9 @@ def main():
             t = n.read_text(encoding="utf-8")
             t2 = re.sub(r"^d3-octree .*?(?=^={20,})", "", t, count=1, flags=re.S | re.M)
             assert t2 != t, "vendor control: the d3-octree notice was not found to drop"
+            t2b = re.sub(r"^katex/contrib/mhchem .*?(?=^={20,})", "", t2, count=1, flags=re.S | re.M)
+            assert t2b != t2, "vendor control: the mhchem notice was not found to drop"
+            t2 = t2b
             t3 = re.sub(r"^(three \S+ \([^\n]*\)\n\n).*?(?=\n={20,})", r"\1See permission at the project site.", t2,
                         count=1, flags=re.S | re.M)
             assert t3 != t2, "vendor control: the three notice was not found to replace"
@@ -141,14 +161,15 @@ def main():
         # the version plant also unhooks KaTeX's notice (it is recorded under 0.18.7): both findings are right
         want = ["a notice for katex 0.18.7, which nothing vendored carries", "katex", "no licence notice for d3-octree",
                 "no licence notice for katex", "sha256 differs katex/katex.min.js", "2 notices for d3-color",
+                "no licence notice for katex/contrib/mhchem",
                 "the notice for 3d-force-graph states 'GPL-3.0-only; not for redistribution', its package says 'MIT'",
                 "the notice for three is not its licence text", "unlisted file katex/extra.js"]
         want = sorted(want)
         if got != want:
             print(f"VENDOR CONTROL FAILED: planted {want}, checker said {got}")
             sys.exit(2)
-        print("vendor control: RED as planted (a flipped byte, an unlisted file, a dropped notice, a notice with other "
-              "words, a changed licence header, a duplicate notice, a version off its pin)")
+        print("vendor control: RED as planted (a flipped byte, an unlisted file, a dropped notice, a dropped part's "
+              "notice, a notice with other words, a changed licence header, a duplicate notice, a version off its pin)")
     bad = check(a.dist, a.offline)
     sources = json.loads((Path(a.dist) / "vendor" / "SOURCES.json").read_text(encoding="utf-8"))
     print(f"vendor: {sum(len(p['files']) for p in sources.values())} files from "

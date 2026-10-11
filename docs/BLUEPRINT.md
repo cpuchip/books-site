@@ -203,9 +203,17 @@ every vendored file. `build/vendor/THIRD-PARTY-NOTICES.txt` carries the licence 
 3d-force-graph's dependency tree (MIT, ISC and BSD-3-Clause; BSD-3 requires the notice) and says that the versions
 inside the bundle are the ones its author built with; each notice is the package's own licence file, its sha256
 recorded with the package's tarball and integrity. `tools/vendor.py` makes all three (maintainer tool, run by hand,
-never by the build). **Withheld:** KaTeX's `contrib/mhchem` (chemistry, `\ce`) is adapted from MathJax code under
-Apache-2.0, and the libraries were approved as MIT; it waits for Michael (asked 2026-10-10), and `\ce` formulas
-show as source until then.
+never by the build). **mhchem:** KaTeX's `contrib/mhchem` (chemistry, `\ce` and `\pu`) is adapted from MathJax code
+under Apache-2.0, not MIT. It was withheld on 2026-10-10 and approved by Michael with its notice on 2026-10-11.
+Its minified file drops the copyright header, so its notice is the header of its source file in the same KaTeX
+tarball plus the full Apache License 2.0 text (from apache.org); `SOURCES.json` records it as a part of katex,
+with the sha256 of that notice, and `tools/vendorcheck.py` reads both again online. Only pages that hold a `\ce{`
+or `\pu{` load it, after `katex.min.js`.
+
+**Full texts and Project Gutenberg** (Michael, 2026-10-10 and 2026-10-11): chapter text pages, when they come,
+show the book's own words with every Project Gutenberg header, footer, licence and reference removed, and carry
+no Project Gutenberg name or link. The link to the PG ebook stays only in the book page's provenance section (the
+"Where this came from" of his ruling), which already quotes the transcription's licence as it states it.
 
 **Math.** `build/site.js` (ours) typesets in the reader's browser: every `data-field="latex"` element as display
 math, and `$...$` inside every text field, with the book's own macros (`book.macros` in the export, carried on the

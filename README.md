@@ -17,3 +17,8 @@ The build refuses a bad export and replaces `dist/` only when every check is gre
 contract and lists each check with the faults it plants in itself on every run. Python 3 standard library only;
 the browser check runs a headless Chromium binary as a command-line tool. KaTeX and 3d-force-graph are vendored
 unchanged in `build/vendor/` (see `THIRD-PARTY-NOTICES.txt` there; `tools/vendor.py` re-vendors them).
+
+## How this was built
+
+By AI agents working with Michael, each with its own charter; the history names them on purpose.
+`docs/how-this-was-built.md` says who did what and what the `#NNNN` numbers in the history mean.

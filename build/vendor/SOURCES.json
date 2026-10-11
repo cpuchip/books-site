@@ -7,6 +7,7 @@
   "files": {
    "katex/LICENSE": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3",
    "katex/contrib/auto-render.min.js": "e5372d199bcdae8b4de71d0f7ceba72a4ba12774a27c60a6f1f77d03b3228ee4",
+   "katex/contrib/mhchem.min.js": "aaf20145c0b8ecd450ccf6eb0cebece2f77d8e6a02c30d291f28c1167b57b2df",
    "katex/fonts/KaTeX_AMS-Regular.ttf": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13",
    "katex/fonts/KaTeX_AMS-Regular.woff": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251",
    "katex/fonts/KaTeX_AMS-Regular.woff2": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308",
@@ -70,6 +71,19 @@
    "katex/katex.min.css": "50d9c78e03da144a021001b7de679133355179bcb06fd11e9e309223056a03dd",
    "katex/katex.min.js": "10a91b479cd927446ceb60409fb0d72b5d0d05eaf446c9e52fafd64058c84540"
   },
+  "parts": [
+   {
+    "name": "katex/contrib/mhchem",
+    "version": "0.18.7",
+    "licence": "Apache-2.0",
+    "files": [
+     "katex/contrib/mhchem.min.js"
+    ],
+    "header_from": "contrib/mhchem/mhchem.js",
+    "licence_url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "licence_sha256": "4ebb8b385af30a1ee091c167e23335c6bb42c655d795b0861ab445cd259bf4ed"
+   }
+  ],
   "licence_sha256": "d3c8c167dfa0a8a7f2ace9fc23ddfb89e609adc13b113e958bede249592b852d"
  },
  "3d-force-graph": {

@@ -12,6 +12,7 @@ import base64
 import hashlib
 import io
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -24,19 +25,26 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "build" / "vendor"
 PACKAGES = {
     # pinned 2026-10-10, each published at least two weeks before
-    # contrib/mhchem is NOT vendored: it is adapted from MathJax code under Apache-2.0, and the libraries were
-    # approved as MIT (asked of Michael 2026-10-10); \ce formulas show as source until he rules
     "katex": ("0.18.7", ["LICENSE", "dist/katex.min.js", "dist/katex.min.css", "dist/fonts/",
-                         "dist/contrib/auto-render.min.js"]),
+                         "dist/contrib/auto-render.min.js", "dist/contrib/mhchem.min.js"]),
     "3d-force-graph": ("1.80.0", ["LICENSE", "dist/3d-force-graph.min.js"]),
 }
 BUNDLED_BY = "3d-force-graph"  # its UMD build carries its whole dependency tree
+# a part of a package under a licence of its own: (package, part, its vendored files, the source file in the same
+# tarball whose header carries the part's copyright, the licence, where its full text is published). Its notice is
+# that header and the licence's full text. mhchem is adapted from MathJax code under Apache-2.0, and its minified
+# file drops the header, so the notice restores it (Michael approved mhchem with its notice, 2026-10-11).
+PARTS = [("katex", "contrib/mhchem", ["katex/contrib/mhchem.min.js"], "contrib/mhchem/mhchem.js", "Apache-2.0",
+          "https://www.apache.org/licenses/LICENSE-2.0.txt")]
 INTRO = (
     "Third-party software in this site's vendor/ directory, and the licences it is used under.\n\n"
     f"3d-force-graph {PACKAGES[BUNDLED_BY][0]} (vendor/3d-force-graph/3d-force-graph.min.js) is a bundle that its "
     "author built with its dependencies inside it (three.js r183 among them). Each package of its dependency "
     "tree follows with its licence. The versions named are those npm resolves today for that release; the "
-    "bundle carries the versions its author built with, under the same licences.\n")
+    "bundle carries the versions its author built with, under the same licences.\n\n"
+    "KaTeX's mhchem (vendor/katex/contrib/mhchem.min.js) is under Apache-2.0, not KaTeX's MIT: it is adapted "
+    "from MathJax code. Its notice is the copyright header of its source file in the same KaTeX release, which the "
+    "minified file leaves out, and the full text of the Apache License 2.0.\n")
 
 
 def npm_view(spec, field):
@@ -62,6 +70,19 @@ def licence_file(pkg_dir):
     return None
 
 
+def source_header(raw):
+    """The copyright header of a source file: its first block comment that opens with a row of stars."""
+    lines = raw.decode("utf-8-sig").splitlines()
+    start = next(i for i, line in enumerate(lines) if re.match(r"/\*{5,}", line))
+    end = next(i for i in range(start + 1, len(lines)) if lines[i].strip() == "*/")
+    return "\n".join(line.rstrip() for line in lines[start:end + 1])
+
+
+def part_notice(header, licence_raw):
+    """A part's notice text (and what vendorcheck hashes): its copyright header, then the licence's full text."""
+    return header + "\n\n" + notice_text(licence_raw)
+
+
 def notice_text(raw):
     """The licence as the notices file carries it (and as vendorcheck hashes it): stripped of outer whitespace."""
     return raw.decode("utf-8", errors="replace").strip()
@@ -71,7 +92,7 @@ def main():
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir(parents=True)
-    sources = {}
+    sources, parts_text = {}, {}
     for name, (version, wanted) in PACKAGES.items():
         spec = f"{name}@{version}"
         url, integrity = npm_view(spec, "dist.tarball"), npm_view(spec, "dist.integrity")
@@ -92,6 +113,18 @@ def main():
             raise SystemExit(f"{spec}: not in the tarball: {missing}")
         sources[name] = {"version": version, "licence": declared, "tarball": url, "integrity": integrity,
                          "files": dict(sorted(files.items()))}
+        for pkg, part, part_files, header_from, licence, licence_url in PARTS:
+            if pkg != name:
+                continue
+            if not all(f in files for f in part_files):
+                raise SystemExit(f"{spec}: the part {part} names files it did not vendor: {part_files}")
+            header = source_header(tar.extractfile(f"package/{header_from}").read())
+            text = part_notice(header, urllib.request.urlopen(licence_url, timeout=60).read())
+            parts_text[(name, part)] = text
+            sources[name].setdefault("parts", []).append(
+                {"name": f"{name}/{part}", "version": version, "licence": licence, "files": part_files,
+                 "header_from": header_from, "licence_url": licence_url,
+                 "licence_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()})
 
     # the notices: install the bundling package's tree (scripts off) only to read each package's licence
     with tempfile.TemporaryDirectory() as tmp:
@@ -122,6 +155,8 @@ def main():
         INTRO,
         f"{'=' * 72}\nkatex {PACKAGES['katex'][0]} ({sources['katex']['licence']})\n\n{katex_licence}\n",
     ]
+    for pkg, part, _, _, licence, _ in PARTS:
+        parts.append(f"{'=' * 72}\n{pkg}/{part} {PACKAGES[pkg][0]} ({licence})\n\n{parts_text[(pkg, part)]}\n")
     for t in tree:
         parts.append(f"{'=' * 72}\n{t['name']} {t['version']} ({t['licence']})\n\n{t['text']}\n")
     (OUT / "THIRD-PARTY-NOTICES.txt").write_text("\n".join(parts), encoding="utf-8")
