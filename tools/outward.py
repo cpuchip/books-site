@@ -1,4 +1,5 @@
-"""outward.py: nothing on the built site names a seat, carries an em-dash, or links a claude.ai page.
+"""outward.py: nothing on the built site names a seat, carries an em-dash, links a claude.ai page, or leaks a
+private address, an internal hostname, a local path or a token.
 
     python3 tools/outward.py EXPORT DIST [--control]
 
@@ -13,10 +14,16 @@ really uses in text outside those fields goes in tools/outward-allow.txt, one ex
 exemption is written down and reviewed.
 
 Failures: any roster name (tools/roster.txt, both groups) in checked text, matched case-blind on word
-characters, so a hyphen does not hide it; an em-dash in checked text; any claude.ai URL or Claude-Session line
-anywhere, exempt or not.
+characters, so a hyphen does not hide it; an em-dash in checked text. Anywhere, exempt or not, ids and links
+included: any claude.ai URL or Claude-Session line; a private or mesh IPv4 address (10/8, 172.16/12,
+192.168/16, 100.64/10); a hostname under an internal suffix (.lan, .local, .internal, .selfhosted,
+.home.arpa); a home-directory path; a token of a known shape (GitHub, Anthropic, Slack, AWS). Those are what
+Michael's ruling of 2026-10-10 (decision 84) keeps out of anything public; family names are on that list too,
+and no check here can know them, so they stay a reading duty.
 --control plants a common seat name in an erratum class, a hyphenated seat name in evidence, an em-dash in
-a correction, a seat name in a graph node name and a claude.ai link, and requires exactly those five red.
+a correction, a seat name in a graph node name, a claude.ai link, a private address in a link, a local path
+in evidence, an internal hostname in a graph node name and a token in site.js, and requires exactly those
+nine red.
 """
 import argparse
 import json
@@ -29,6 +36,21 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 CLAUDE = re.compile(r"claude\.ai|Claude-Session", re.I)
+_OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+LEAKS = [  # checked everywhere, like CLAUDE: none of these has a reason to be on the site
+    ("claude.ai link", CLAUDE),
+    ("private address", re.compile(
+        r"(?<![\d.])(?:10(?:\." + _OCTET + r"){3}"
+        r"|(?:172\.(?:1[6-9]|2\d|3[01])|192\.168|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7]))(?:\." + _OCTET + r"){2})"
+        r"(?![\d.]*\d)")),
+    ("internal hostname", re.compile(r"\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:lan|local|internal|selfhosted|home\.arpa)\b", re.I)),
+    ("local path", re.compile(r"(?:/home/|/Users/|/root/|[A-Za-z]:\\Users\\)")),
+    ("token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36}|github_pat_\w{22,}|sk-ant-[\w-]{20,}|xox[abprs]-[\w-]{10,}|AKIA[0-9A-Z]{16})")),
+]
+
+
+def leaks(s):
+    return [kind for kind, rx in LEAKS if rx.search(s)]
 EM = "\u2014"
 VENDOR_OURS = {"vendor/SOURCES.json", "vendor/THIRD-PARTY-NOTICES.txt"}  # written by tools/vendor.py: checked
 TEXT_FILES = {".json", ".css", ".js", ".mjs", ".txt", ".svg", ".xml"}
@@ -100,9 +122,9 @@ def check(export, dist):
     dist = Path(dist)
     bad = []
 
-    def judge(rel, s, where):
-        if CLAUDE.search(s):
-            bad.append((rel, "claude.ai link", s[:120]))
+    def judge(rel, s, where, raw_checked=False):
+        if not raw_checked:
+            bad.extend((rel, kind, s[:120]) for kind in leaks(s))
         flat = " ".join(s.split())
         if flat in keep or flat in allow:
             return
@@ -124,20 +146,20 @@ def check(export, dist):
             for s in t.texts:
                 judge(rel, s, "text")
             for k, v in t.attrs:
-                if k in ("data-id", "id", "href", "src") and not CLAUDE.search(v):
-                    continue  # ids are the export's own; links are checked by linkcheck (claude.ai still fails)
+                if k in ("data-id", "id", "href", "src"):
+                    # ids are the export's own and links are checked by linkcheck; the leaks still fail here
+                    bad.extend((rel, kind, v[:120]) for kind in leaks(v))
+                    continue
                 judge(rel, v, f"attribute {k}")
         elif rel == "graph/graph.json":
             g = json.loads(f.read_text(encoding="utf-8"))
             raw = f.read_text(encoding="utf-8")
-            if CLAUDE.search(raw):
-                bad.append((rel, "claude.ai link", ""))
+            bad.extend((rel, kind, "") for kind in leaks(raw))
             for n in g["nodes"]:
-                judge(rel, n[2], f"graph node {n[0]}")
+                judge(rel, n[2], f"graph node {n[0]}", raw_checked=True)
         elif f.suffix in TEXT_FILES:
             raw = f.read_text(encoding="utf-8")
-            if CLAUDE.search(raw):
-                bad.append((rel, "claude.ai link", ""))
+            bad.extend((rel, kind, "") for kind in leaks(raw))
             if EM in raw or "\\u2014" in raw:
                 bad.append((rel, "em-dash", ""))
             m = names.search(raw)
@@ -161,21 +183,26 @@ def control(export, dist):
             n = re.subn(pattern, lambda x: x.group(0) + insert, s, count=1)
             assert n[1] == 1, f"outward control: {pattern!r} did not land"
             return n[0]
-        el = plant(el, r'<p class="ev">', "settled by qwenniverse-fermion-check. ")
+        el = plant(el, r'<p class="ev">', "settled by qwenniverse-fermion-check, see /home/someone/notes. ")
         el = plant(el, r'<p class="n">', "caught in the tutor run, ")
         el = plant(el, r'Corrected: <span class="tx"[^>]*>', f"{EM} ")
-        t = plant(t[:m.start()] + el + t[m.end():], r'<main>', '<a href="https://claude.ai/chat/x">x</a>')
+        t = plant(t[:m.start()] + el + t[m.end():], r'<main>',
+                  '<a href="https://claude.ai/chat/x">x</a><a href="http://10.0.0.1:8080/">y</a>')
         book.write_text(t, encoding="utf-8")
         gpath = copy / "graph" / "graph.json"
         g = json.loads(gpath.read_text(encoding="utf-8"))
-        g["nodes"][0][2] = g["nodes"][0][2] + " (abacus concurred)"
+        g["nodes"][0][2] = g["nodes"][0][2] + " (abacus concurred, on seat.box.lan)"
         gpath.write_text(json.dumps(g, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        js = copy / "site.js"
+        js.write_text(js.read_text(encoding="utf-8") + "\n// ghp_" + "x" * 36 + "\n", encoding="utf-8")
         got = sorted(why.split(" in ")[0] if why.startswith("seat") else why for _, why, _ in check(export, copy))
-    want = sorted(["seat name 'qwenniverse-fermion'", "seat name 'tutor'", "em-dash", "seat name 'abacus'", "claude.ai link"])
+    want = sorted(["seat name 'qwenniverse-fermion'", "seat name 'tutor'", "em-dash", "seat name 'abacus'", "claude.ai link",
+                   "private address", "local path", "internal hostname", "token"])
     if got != want:
         print(f"OUTWARD CONTROL FAILED: planted {want}, checker said {got[:8]}")
         sys.exit(2)
-    print("outward control: RED as planted (seat names in a class, evidence and a graph node; an em-dash; a claude.ai link)")
+    print("outward control: RED as planted (seat names in a class, evidence and a graph node; an em-dash; a claude.ai link;"
+          " a private address, a local path, an internal hostname, a token)")
 
 
 def main():
@@ -192,7 +219,8 @@ def main():
     if bad:
         print(f"OUTWARD RED: {len(bad)} findings")
         sys.exit(1)
-    print("OUTWARD GREEN: no seat names, em-dashes or claude.ai links outside the book's own text")
+    print("OUTWARD GREEN: no seat names or em-dashes outside the book's own text; no claude.ai links, private addresses,"
+          " internal hostnames, local paths or tokens anywhere")
 
 
 if __name__ == "__main__":

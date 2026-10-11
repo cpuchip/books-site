@@ -114,9 +114,11 @@ keys), 135 errata, graph 19,904 nodes and 58,517 links.
 4. **Outward.** `tools/outward.py`: every text node and attribute of every page, every served text file, and
    every graph node name. Exempt only: text quoted from the book (problem text and answers, excerpts, equation
    LaTeX, an erratum's printed text and source context, titles, the licence sentence) and the exact strings in
-   `tools/outward-allow.txt`. Fails on any roster name (`tools/roster.txt`), an em-dash, any claude.ai link.
-   Controls: seat names in an erratum class, in evidence (hyphenated) and in a graph node; an em-dash in a
-   correction; a claude.ai link.
+   `tools/outward-allow.txt`. Fails on any roster name (`tools/roster.txt`) or an em-dash in checked text, and
+   anywhere (ids and links included) on a claude.ai link, a private or mesh IPv4 address, a hostname under an
+   internal suffix, a home-directory path, or a token of a known shape. Controls: seat names in an erratum
+   class, in evidence (hyphenated) and in a graph node; an em-dash in a correction; a claude.ai link; a private
+   address in a link; a local path in evidence; an internal hostname in a graph node; a token in site.js.
 
 **URL contract** (the oracle's placement check reads it from this list, not from the build):
 `index.html` lists books; `books/<book>/index.html` holds the book's chapters list and errata;
@@ -280,10 +282,13 @@ associates the stripped text with PG. The text has no source yet (pd-books carri
 
 ## Deploy
 
-**Before this repo goes public** (Michael's call): `tools/roster.txt` and the planted names in
-`tools/outward.py`'s control list the very names the outward check keeps off the site. They move out of the
-repo (the build reading the list from a private path) or become hashes (each word checked by its sha256), so
-that publishing the code does not publish the list.
+**Before this repo goes public** (Michael's call). Michael ruled on 2026-10-10 (decision 84) that his own
+public repos and sites keep their history, seat names and message numbers, so `tools/roster.txt` and the
+control's planted names may stay. What must not be public, in the site or in this repo's history: addresses,
+hostnames with domains, local paths, session links, secrets, family names. The outward check guards the site
+against the first five; the repo's history is searched for all six before the flip. The same ruling lets an
+erratum's credit name the seat that settled it, verbatim from the export: the roster check will exempt that
+field when the export carries it.
 
 Static files from this repo through Dokploy on the hosting server, deployed by its operator. Rehearsed on a Linux
 clone before any deploy request. The repo stays PRIVATE and the site unpublished until Michael says so.
