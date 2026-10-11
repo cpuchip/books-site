@@ -10,6 +10,8 @@ Code: MIT. Data: see pd-books (CC0 for everything we made; Project Gutenberg's l
 
     sh build.sh                       # fetch pd-books at pd-books.pin, build, check, write dist/
     CHROMIUM=/path/to/chrome sh build.sh   # also the browser check (math typeset, 3D graph counts)
+    docker build .                    # the deployed image: the build and its checks, then nginx serving dist
+    python3 tools/verifylive.py URL DIST   # the live site serves exactly the rehearsed dist
 
 The build refuses a bad export and replaces `dist/` only when every check is green; `docs/BLUEPRINT.md` is the
 contract and lists each check with the faults it plants in itself on every run. Python 3 standard library only;

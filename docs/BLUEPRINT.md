@@ -290,5 +290,15 @@ against the first five; the repo's history is searched for all six before the fl
 erratum's credit name the seat that settled it, verbatim from the export: the roster check will exempt that
 field when the export carries it.
 
-Static files from this repo through Dokploy on the hosting server, deployed by its operator. Rehearsed on a Linux
-clone before any deploy request. The repo stays PRIVATE and the site unpublished until Michael says so.
+Static files from this repo through Dokploy on the hosting server, deployed by its operator. Michael said to make
+the site public on 2026-10-11; the repo stays PRIVATE until he flips it. The deploy, in order:
+1. **Rehearsal** at the commit to deploy: a fresh clone, `CHROMIUM=... sh build.sh`, every check green including
+   the browser's. Its dist is the reference.
+2. **The image** (`Dockerfile`): build.sh runs inside it with every check but the browser's (no Chromium there), so
+   a red check fails the deploy. The served stage is nginx with `deploy/nginx.conf`: static files only, no access
+   log, no directory listings, `nosniff` and `no-referrer`. Only the built site is copied into it.
+3. **The live check**: `tools/verifylive.py https://books.cpuchip.net/ DIST --control` fetches every path of the
+   rehearsed dist (609 at 3efd133, directory URLs included) and requires the same bytes, and requires 404 for the
+   repo's source paths. Rehearsed against the image on the build box: green, and its control red as planted. The
+   build is deterministic (version.json holds the pin and the export's own timestamp, never a build time), which
+   is what lets the served bytes be compared with the rehearsal's.
