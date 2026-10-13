@@ -1,6 +1,6 @@
 {
- "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 040cb80 (unchanged from 30d284c). The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
- "pin": "040cb80fde095e5ca8b141d615852ae16f5d5169",
+ "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 94f9c53. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
+ "pin": "94f9c53a19c6cfa0d3b55e0ef5833f1850adfff2",
  "books": {
   "ball-mathematical-recreations-1905": 5,
   "blackburn-elements-plane-trigonometry-1863": 5,
@@ -22,7 +22,8 @@
   "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)",
   "all": "lowered on 2026-10-13 from 1,066 in all at b3c614f to 147 at 3ed7925, when the export gained each book's macros and lost the producer markup; no book went up",
   "ball-mathematical-recreations-1905 (text)": "27 to 31 on 2026-10-13 at 3372745: Ball's LRalign alignments, which leaked out of math as plain text at 3ed7925 (25 runs of & outside math), are math now, so more of the text reaches KaTeX; 7 more fail on Ball's own \\\\Therefore, which the book's macros do not define, and 1 on \\\\addlinespace (asked of the data owner)",
-  "whitehead-introduction-to-mathematics-1911 (text)": "3 to 0 on 2026-10-13, measured at 040cb80 when its text pages were released"
+  "whitehead-introduction-to-mathematics-1911 (text)": "3 to 0 on 2026-10-13, measured at 040cb80 when its text pages were released",
+  "todhunter-spherical-trigonometry-1886 (text)": "34 at 3372745, 21 at 30d284c, 15 at 94f9c53, measured each time"
  },
  "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3372745, the first export where every chapter with text has a page; a released book's re-measured at each pin, 30d284c for Todhunter; a book held in build/text-hold.json keeps its last measure until it is released; a book not listed is held to 0).",
  "text": {
@@ -37,7 +38,7 @@
   "planck-treatise-on-thermodynamics-1903": 131,
   "slaught-lennes-solid-geometry-1919": 53,
   "thompson-calculus-made-easy-1914": 32,
-  "todhunter-spherical-trigonometry-1886": 21,
+  "todhunter-spherical-trigonometry-1886": 15,
   "wentworth-first-steps-in-algebra-1894": 57,
   "wentworth-plane-geometry-1899": 15,
   "whitehead-introduction-to-mathematics-1911": 0

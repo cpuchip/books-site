@@ -27,7 +27,9 @@ NOT_PROSE = r"(?:label|ref|eqref|pageref|index|includegraphics|Graphic|Input|inp
 # an escaped \$ is a dollar sign, not math (the data owner's find, 2026-10-13: "\$26" flipped every later $)
 MATH = re.compile(r"(?<!\\)\$\$.*?\$\$|(?<!\\)\$(?:\\.|[^$\\])*\$|\\\[.*?\\\]|\\\(.*?\\\)|"
                   r"\\begin\{(equation|align|gather|multline|eqnarray|flalign|alignat|displaymath|math|array)\*?\}.*?"
-                  r"\\end\{\1\*?\}", re.S)
+                  r"\\end\{\1\*?\}|"
+                  # mhchem's \ce and \pu in prose are formulas, which the page sets as math (the data owner's point)
+                  r"\\(?:ce|pu)\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}", re.S)
 # words (letters, accented ones too) and numbers: a lost section, equation or exercise number is a lost token
 WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?|\d+")
 
