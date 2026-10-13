@@ -14,6 +14,9 @@ The contract for the site and the checks that judge it. Written 2026-10-10, befo
 
 Census at b3c614f (the export side of the oracle): 15 books, 235 chapters, 5,027 problems (341 with
 keys), 135 errata, graph 19,904 nodes and 58,517 links.
+Census at 3ed7925 (pinned 2026-10-13, the export regenerated on sound hardware after a memory fault on the box
+that builds it): 236 chapters (Boyden's ALGEBRAIC NOTATION is its own chapter now), graph 19,912 nodes and
+58,592 links; problems, keys and errata unchanged in number.
 
 ## Refusal (the build stops, writes nothing to dist/)
 
@@ -278,8 +281,10 @@ pixels of the graph, our scripts reporting on themselves). (The commit that brou
 passes" and "22 holes"; that count was wrong, and this is the true one.)
 
 **A ratchet, not yet a gate:** the number shown as source may not exceed each book's ceiling in
-`build/math-ceiling.json` (1,070 in all at b3c614f; Planck raised by 4 for mhchem, with the reason in the file). At b3c614f about 457 equations need the books' own macros, which
+`build/math-ceiling.json` (1,070 in all at b3c614f; Planck raised by 4 for mhchem, with the reason in the file; 1,066 once mhchem was vendored on 2026-10-11). At b3c614f about 457 equations need the books' own macros, which
 the next export carries; the gate becomes zero, or an explicit per-formula list, once it lands.
+At 3ed7925 the macros and the producer-markup fix landed: 147 in all, every book at or below its old ceiling,
+Maxwell and Macfarlane at zero. Not zero yet, so the ratchet stays a ratchet.
 
 ## Full book text (ruled by Michael 2026-10-10)
 

@@ -1,24 +1,25 @@
 {
- "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books b3c614f. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
- "pin": "b3c614f2714bef705b55d538f520e703ea6474e7",
+ "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 3ed7925. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
+ "pin": "3ed7925eb7a531d5e20a4fb9dff6ccc54c84ec34",
  "books": {
   "ball-mathematical-recreations-1905": 5,
-  "blackburn-elements-plane-trigonometry-1863": 24,
+  "blackburn-elements-plane-trigonometry-1863": 5,
   "boyden-first-book-in-algebra-1895": 7,
-  "de-morgan-elementary-illustrations-calculus-1899": 60,
-  "dickson-theory-of-equations-1922": 42,
-  "hardy-course-of-pure-mathematics-1921": 568,
-  "macfarlane-vector-analysis-quaternions-1906": 2,
-  "maxwell-elementary-treatise-electricity-1888": 11,
-  "planck-treatise-on-thermodynamics-1903": 200,
+  "de-morgan-elementary-illustrations-calculus-1899": 6,
+  "dickson-theory-of-equations-1922": 40,
+  "hardy-course-of-pure-mathematics-1921": 32,
+  "macfarlane-vector-analysis-quaternions-1906": 0,
+  "maxwell-elementary-treatise-electricity-1888": 0,
+  "planck-treatise-on-thermodynamics-1903": 40,
   "slaught-lennes-solid-geometry-1919": 5,
-  "thompson-calculus-made-easy-1914": 95,
-  "todhunter-spherical-trigonometry-1886": 8,
-  "wentworth-first-steps-in-algebra-1894": 34,
-  "wentworth-plane-geometry-1899": 3,
-  "whitehead-introduction-to-mathematics-1911": 2
+  "thompson-calculus-made-easy-1914": 1,
+  "todhunter-spherical-trigonometry-1886": 3,
+  "wentworth-first-steps-in-algebra-1894": 1,
+  "wentworth-plane-geometry-1899": 1,
+  "whitehead-introduction-to-mathematics-1911": 1
  },
  "history": {
-  "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)"
+  "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)",
+  "all": "lowered on 2026-10-13 from 1,066 in all at b3c614f to 147 at 3ed7925, when the export gained each book's macros and lost the producer markup; no book went up"
  }
 }
