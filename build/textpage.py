@@ -147,6 +147,8 @@ def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset()):
                 continue
             elif k in ("colspan", "rowspan") and tag in ("td", "th") and SPAN.match(v):
                 kept.append((k, v))
+            elif k == "value" and tag == "li" and re.fullmatch(r"[1-9][0-9]{0,3}", v):
+                kept.append((k, v))  # the book's own item number (an exercise's), since pd-books 040cb80
             elif k == "alt" and tag == "img":
                 kept.append((k, v))
             elif k == "src" and tag == "img":

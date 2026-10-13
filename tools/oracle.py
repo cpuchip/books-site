@@ -89,12 +89,12 @@ TEXT_TAGS = {"a", "blockquote", "br", "caption", "div", "em", "figcaption", "fig
              "hr", "img", "li", "ol", "p", "section", "span", "strong", "sup", "table", "tbody", "td", "th", "thead",
              "tr", "ul"}
 TEXT_IN_ATTRS = {"id", "class", "style", "colspan", "rowspan", "src", "alt", "href", "role", "data-label",
-                 "data-latex-placement"}
+                 "data-latex-placement", "value"}
 TEXT_STYLE = re.compile(r"\s*text-align:\s*(?:left|center|right|justify)\s*;?\s*\Z"
                         r"|(?:\s*(?:width|height):\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*(?:;|\Z))+\s*\Z")
 # what a text page's article may carry, once written again: these attributes; classes from this list (or ta-*, the
 # alignment); every id and fragment with the c- prefix, so no book id can be one the page itself uses
-TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan"}
+TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan", "value"}
 TEXT_OUT_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back",
                     "ta-left", "ta-center", "ta-right", "ta-justify"}
 TEXT_PAGE = re.compile(r"books/([^/]+)/ch/([^/]+)/text/index\.html\Z")
@@ -118,6 +118,8 @@ class _TextIn(HTMLParser):
                 self.bad.append(f"{k}=")
             elif k == "style" and not TEXT_STYLE.match(v):
                 self.bad.append(f"style={v[:30]!r}")
+            elif k == "value" and not (tag == "li" and re.fullmatch(r"[1-9][0-9]{0,3}", v)):
+                self.bad.append(f"value={v[:30]!r} on <{tag}>")
             elif k == "href":
                 if not v.startswith("#"):
                     self.bad.append(f"href={v[:30]!r}")
@@ -470,6 +472,8 @@ class _TextOut(HTMLParser):
             v = v or ""
             if k not in TEXT_OUT_ATTRS:
                 self.bad.append(f"<{tag} {k}=...> in a chapter's text")
+            elif k == "value" and not (tag == "li" and re.fullmatch(r"[1-9][0-9]{0,3}", v)):
+                self.bad.append(f"value {v[:20]!r} on <{tag}> in a chapter's text")
             elif k == "class" and not set(v.split()) <= TEXT_OUT_CLASSES:
                 self.bad.append(f"class {v[:40]!r} in a chapter's text")
             elif k == "id" and not v.startswith("c-"):
