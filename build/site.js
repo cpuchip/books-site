@@ -38,6 +38,24 @@
       errorCallback: function () { source += 1; }
     });
   });
+  // a chapter's own text (pandoc's spans): \(...\) inline, \[...\] display; typeset into a new element, so a
+  // formula KaTeX cannot typeset keeps its source on the page
+  Array.prototype.forEach.call(document.querySelectorAll("main article.text span.math.inline, main article.text span.math.display"), function (el) {
+    var display = el.classList.contains("display");
+    var tex = el.textContent;
+    var open = display ? "\\[" : "\\(", close = display ? "\\]" : "\\)";
+    if (tex.slice(0, 2) === open && tex.slice(-2) === close) tex = tex.slice(2, -2);
+    var out = document.createElement("span");
+    out.className = display ? "math math-display" : "math";
+    try {
+      katex.render(tex, out, options(display));
+      el.parentNode.replaceChild(out, el);
+    } catch (e) {
+      source += 1;
+      el.classList.add("tex-source");
+      el.title = "Shown as source: " + e.message;
+    }
+  });
   var typeset = document.querySelectorAll("main .katex").length;
   // how far the page is wider than its window (0 when nothing overflows): the browser check requires 0
   var root = document.documentElement;

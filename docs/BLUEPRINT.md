@@ -296,7 +296,87 @@ distribute verbatim copies of the ebooks". So: chapter pages carry the book's ow
 footer, licence and every PG reference stripped, changed in format only (math typeset, errata shown beside
 the text, never edited into it); the book's provenance page links the PG ebook and quotes PG's 1.E.1
 sentence, as it does now. The open question put to Michael: whether that link on the same site still
-associates the stripped text with PG. The text has no source yet (pd-books carries excerpts only).
+associates the stripped text with PG. (Answered 2026-10-11, recorded under "Full texts and Project Gutenberg"
+above: the text pages carry no PG name or link; the link stays only in the provenance section.) The text has no
+source yet (pd-books carries excerpts only). (Superseded 2026-10-13: pd-books 3ed7925 carries each chapter's
+`text_html`; the next section is how it becomes pages.)
+
+## The chapter text pages (written 2026-10-13, before their code)
+
+**What the export gives** (census at 3ed7925, `htmlcensus`): 226 of 236 chapters have `text_html`, which is
+pandoc's HTML of the transcription. It has 29 tags and no script, style, form, iframe, comment or external
+link; styles are only `text-align` and `width`; 244 images, all present under `export/images/<book>/`; no
+"Gutenberg". Math is `<span class="math inline">\(..\)</span>` and `<span class="math display">\[..\]</span>`.
+The link structure is broken in ways that matter: of 1,202 fragment links, 666 do not resolve in their own
+chapter, because the books were converted whole and then split. So each footnote sits in the book's last
+chapter, and cross-references point at other chapters or at nothing.
+
+**Pages.** `books/<book>/ch/<chapter>/text/index.html`, one for each chapter that has `text_html` and passes the
+sanitizer, linked from its chapter page ("Read the chapter"). A chapter without one has no link and no page.
+
+**The sanitizer** (`build/textpage.py`): it parses the HTML and writes it again from three lists.
+- KEEP: the census's tags; `class` tokens from a fixed list, the ones the site reads (`math inline display
+  smallcaps center footnotes footnote-ref footnote-back`), any other token dropped; `id`, if a link points to it,
+  it is unique on the page, and it has no backslash or space (an id nothing links to is dropped), written with a
+  `c-` prefix, as are the fragments that point to it; `style` holding
+  only `text-align: left|center|right|justify` (written as a class, `ta-center` and so on) or
+  `width: <number><%|in|cm|mm|em|px|pt>` (dropped; site.css keeps every image inside the page), so no `style`
+  attribute ships and the oracle's rule against any style attribute stands for these pages too; `colspan` and
+  `rowspan` of 1 to 99; `img` `src`, if it is `images/<this book>/...` and the export holds the file (rewritten
+  to the site's copy), and its `alt`; `a` `href`, if it is a fragment (see links).
+- DROP, known and inert: `role`, `data-label`, `data-latex-placement`.
+- REJECT anything else: an unknown tag or attribute, a comment, a declaration, an unbalanced end tag, "gutenberg"
+  in any case. A rejected chapter gets no page; the build prints how many were withheld and why, chapter by
+  chapter. It never strips something unknown and ships the rest.
+
+**Links**, resolved in order: a target on the same page stays a fragment; a target that exists in exactly one
+other chapter of the same book (one that has a page) becomes a link to that page; anything else loses its
+`<a>` and keeps its words. So footnotes read as endnotes and no link is dead.
+
+**Errata beside the text.** A book with errata gets text pages only once every erratum names its chapter, asked
+of the data owner (#7833); each page then lists its chapter's errata beside the text. A book with no errata
+says so on each page. 12 of the 15 books have none at 3ed7925.
+
+**Math.** `site.js` typesets each `span.math` inside the text, into a new element; a formula KaTeX cannot
+typeset stays as its source, as everywhere else. The browser check counts text pages with the rest, and each
+book gets a second ceiling for its text pages (`"text"` in `build/math-ceiling.json`), measured, so that the
+pages' as-source formulas cannot hide behind the book's. Wide display math and tables scroll inside their own
+box; the page stays 0 px wider than the window.
+
+**The oracle's "text" kind** (`tools/oracle.py`, its own parser, not the builder's):
+1. Every chapter with `text_html` has a page, or is named in the build's withheld list with a reason.
+2. A page's text, every text node in order with whitespace collapsed, equals the export's `text_html` text in
+   the same form. The sanitizer may drop attributes and `<a>` tags, never a word.
+3. Every image on a page is byte-identical to the export's file, and no image is copied that no page uses.
+4. No text page holds "gutenberg" in any case.
+5. A book with errata that do not name their chapter, or whose macros name the transcription's source (the page
+   carries the macros), has its chapters withheld; the oracle decides both from the export alone, and requires
+   the chapter page's line to give exactly that reason.
+6. Planted, each of which must go red or be withheld: a `<script>`, an `onclick`, a `javascript:` href, an
+   external href, an `<iframe>`, a `style` with `url(`, a duplicate linked id, "Gutenberg" in the text, a dropped
+   paragraph (the oracle's text compare), a changed image byte, and one more as-source formula than a text
+   ceiling allows.
+
+**Built 2026-10-13 at 3ed7925:** 69 text pages and 157 withheld (56 for errata without chapters: Boyden,
+Thompson, Wentworth's First Steps; 101 for macros that name the source: Blackburn, De Morgan, Hardy, Planck,
+Whitehead). Every control above went red as planted; the builder's sanitizer and the oracle's own rules agree on
+nine planted chapters (script, onclick, external link, style with url, the name, a comment, an unbalanced tag, an
+image of another book, a duplicate linked id). On the 69 pages, 21k formulas typeset and 544 show as source.
+
+**Fresh eyes, before the commit** (a reviewer who did not write it, 2026-10-13): no way found to run script, load
+a remote resource, leave the site or escape the article. Fixed from its findings: a book class that is one of the
+site's (`graph-canvas` clips, `tx` typesets `$...$`) and a book id that is one of the page's (`math-report`) are
+now impossible (fixed class list, `c-` ids, each a control); an unlinked `<a>` keeps its id on a span so links
+to it still land; link targets are read by the parser, not a regex; text that ends inside a tag is rejected
+(the parser drops it without a word, in the builder and the oracle alike); an image path with `%`, `\`, `?` or
+`#` is rejected; the oracle now checks the article's tags, classes and ids itself and reads the withheld line's
+words against its reason; site.js typesets only the spans browsercheck counts.
+
+**Not deployed yet, on review:** `tools/textholes.py EXPORT --control` counts what the converter left behind or
+dropped (math masked). At 3ed7925: 214 empty "( )" where a reference was, 126 section signs with no number, 22
+"p." with no number, 102 index entries printed as text, 52 runs of alignment TeX outside math, 195 headings that
+begin with a dot. All went to the data owner (#7830, #7834, #7835, #7846, #7848), who is fixing them in one export.
+The text pages go live after that export, this count, and a read of the pages.
 
 ## Deploy
 

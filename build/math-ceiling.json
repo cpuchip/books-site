@@ -21,5 +21,15 @@
  "history": {
   "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)",
   "all": "lowered on 2026-10-13 from 1,066 in all at b3c614f to 147 at 3ed7925, when the export gained each book's macros and lost the producer markup; no book went up"
+ },
+ "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3ed7925 on the 69 pages built then; a book not listed is held to 0, and a book whose text pages are withheld has none).",
+ "text": {
+  "ball-mathematical-recreations-1905": 27,
+  "dickson-theory-of-equations-1922": 239,
+  "macfarlane-vector-analysis-quaternions-1906": 28,
+  "maxwell-elementary-treatise-electricity-1888": 30,
+  "slaught-lennes-solid-geometry-1919": 88,
+  "todhunter-spherical-trigonometry-1886": 116,
+  "wentworth-plane-geometry-1899": 16
  }
 }

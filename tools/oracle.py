@@ -62,7 +62,7 @@ from collections import defaultdict
 from html.parser import HTMLParser
 from pathlib import Path
 
-KINDS = ("book", "chapter", "exercise_set", "excerpt", "equation", "problem", "erratum", "term", "relation")
+KINDS = ("book", "chapter", "exercise_set", "excerpt", "equation", "problem", "erratum", "term", "relation", "text")
 # URL contract (docs/BLUEPRINT.md), the parts the link check needs
 TERMS_PAGE = "books/{book}/terms/index.html"
 # the term types, copied from the blueprint (not imported from the build); a group per type
@@ -81,6 +81,113 @@ HIDING_CSS = re.compile(r"(?<![\w-])(?:display\s*:\s*none|visibility\s*:|opacity
 
 def term_anchor(node_id):
     return "t-" + node_id.replace("/", "-")
+
+
+# the chapter text pages (docs/BLUEPRINT.md, "The chapter text pages"): the oracle's own copy of what a chapter's
+# text_html may hold, written from the census, not imported from build/textpage.py, so the two can disagree
+TEXT_TAGS = {"a", "blockquote", "br", "caption", "div", "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5",
+             "hr", "img", "li", "ol", "p", "section", "span", "strong", "sup", "table", "tbody", "td", "th", "thead",
+             "tr", "ul"}
+TEXT_IN_ATTRS = {"id", "class", "style", "colspan", "rowspan", "src", "alt", "href", "role", "data-label",
+                 "data-latex-placement"}
+TEXT_STYLE = re.compile(r"\s*(?:text-align:\s*(?:left|center|right|justify)|width:\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt))"
+                        r"\s*;?\s*\Z")
+# what a text page's article may carry, once written again: these attributes; classes from this list (or ta-*, the
+# alignment); every id and fragment with the c- prefix, so no book id can be one the page itself uses
+TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan"}
+TEXT_OUT_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back",
+                    "ta-left", "ta-center", "ta-right", "ta-justify"}
+TEXT_PAGE = re.compile(r"books/([^/]+)/ch/([^/]+)/text/index\.html\Z")
+WITHHELD = {"errata": "its book's errata do not yet say which chapter each is in",
+            "macros": "its book's macros name the transcription's source"}
+
+
+class _TextIn(HTMLParser):
+    """What is wrong with a chapter's text_html by the oracle's own rules (empty: it may be a page)."""
+
+    def __init__(self, book, export):
+        super().__init__(convert_charrefs=True)
+        self.book, self.export, self.bad, self.stack, self.ids, self.links, self.data = book, export, [], [], [], [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in TEXT_TAGS:
+            self.bad.append(f"<{tag}>")
+        for k, v in attrs:
+            v = v or ""
+            if k not in TEXT_IN_ATTRS:
+                self.bad.append(f"{k}=")
+            elif k == "style" and not TEXT_STYLE.match(v):
+                self.bad.append(f"style={v[:30]!r}")
+            elif k == "href":
+                if not v.startswith("#"):
+                    self.bad.append(f"href={v[:30]!r}")
+                else:
+                    self.links.append(v[1:])
+            elif k == "src" and not (v.startswith(f"images/{self.book}/") and ".." not in v.split("/")
+                                     and not re.search(r"[%\\?#]", v) and (Path(self.export) / v).is_file()):
+                self.bad.append(f"src={v[:30]!r}")
+            elif k == "id":
+                self.ids.append(v)
+        if tag not in ("br", "hr", "img"):
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in ("br", "hr", "img"):
+            return
+        if not self.stack or self.stack[-1] != tag:
+            self.bad.append(f"</{tag}> unbalanced")
+        else:
+            self.stack.pop()
+
+    def handle_data(self, data):
+        self.data.append(data)
+
+    def handle_comment(self, data):
+        self.bad.append("comment")
+
+    def handle_decl(self, decl):
+        self.bad.append("declaration")
+
+    def unknown_decl(self, data):
+        self.bad.append("declaration")
+
+    def handle_pi(self, data):
+        self.bad.append("processing instruction")
+
+
+def text_expectation(export, d):
+    """{chapter id: ("page", its text) or ("withheld", "errata" | "macros" | "markup")} for each chapter that has
+    text_html: what the site must do with it, decided here from the export alone."""
+    bid = d["book"]["id"]
+    chs = [c for c in d["chapters"] if c.get("text_html")]
+    if any(not x.get("chapter") for x in d.get("errata") or []):
+        return {c["id"]: ("withheld", "errata") for c in chs}
+    if re.search(r"gutenberg", json.dumps(d["book"].get("macros") or {}), re.I):
+        return {c["id"]: ("withheld", "macros") for c in chs}
+    targets = set()
+    parsed = {}
+    for c in chs:
+        p = _TextIn(bid, export)
+        p.feed(c["text_html"])
+        p.close()
+        parsed[c["id"]] = p
+        targets.update(p.links)
+    out = {}
+    for c in chs:
+        p = parsed[c["id"]]
+        bad = list(p.bad) + ([f"<{p.stack[-1]}> unclosed"] if p.stack else [])
+        if c["text_html"].rfind("<") > c["text_html"].rfind(">"):
+            bad.append("ends inside a tag")
+        if re.search(r"gutenberg", c["text_html"], re.I):
+            bad.append("gutenberg")
+        mine = set(p.links) | targets
+        dup = [i for i in set(p.ids) if i in mine and p.ids.count(i) > 1]
+        if dup:
+            bad.append(f"id {dup[0]!r} twice")
+        out[c["id"]] = ("withheld", "markup") if bad else ("page", "".join(p.data))
+    return out
+
+
 VOID = {"br", "meta", "link", "img", "hr", "input", "source", "wbr", "area", "base", "col", "embed", "track"}
 
 
@@ -101,14 +208,15 @@ def export_units(export):
     stated = {}  # (page, key) -> the number the page must state
 
     def add(kind, i, page, *text, evidence=None, anchors=None, lead=None, anchor_id=None, group=None, unit_counts=None,
-            fields=None):
+            fields=None, withheld=None):
         counts[(kind, i)] += 1
         units[(kind, i)] = {"page": page, "text": [norm(t) for t in text if isinstance(t, str) and t.strip()],
                             "evidence": [norm(t) for t in re.split(r"(?<=[.;])\s+", evidence or "") if len(t.strip()) > 20],
                             "anchors": anchors, "lead": norm(lead) if lead is not None else None,
                             "anchor_id": anchor_id, "group": group, "counts": unit_counts or {},
                             "fields": None if fields is None else
-                            {k: [norm(v) for v in vs if isinstance(v, str) and v.strip()] for k, vs in fields.items()}}
+                            {k: [norm(v) for v in vs if isinstance(v, str) and v.strip()] for k, vs in fields.items()},
+                            "withheld": withheld}
     chapter_book, chapter_label = {}, {}
 
     for b in listed:
@@ -145,6 +253,14 @@ def export_units(export):
             add("problem", p["id"], ch_page(set_chapter.get(p.get("set"))),
                 p.get("markdown"), *(p.get("answer_markdown") or []), *steps,
                 fields={"text": [p.get("markdown")], "answer": p.get("answer_markdown") or [], "step": steps})
+        for cid, (what, val) in sorted(text_expectation(export, d).items()):
+            text_page = f"books/{bid}/ch/{cid[len(bid) + 1:]}/text/index.html"
+            if what == "page":
+                add("text", cid, text_page, fields={"body": [val]})
+                if d["book"].get("macros"):
+                    stated[(text_page, "macros")] = json.dumps(d["book"]["macros"], sort_keys=True, ensure_ascii=False)
+            else:
+                add("text", cid, ch_page(cid), withheld=val)
         for x in d.get("errata", []):
             add("erratum", x["id"], book_page, x.get("printed"), x.get("corrected"), x.get("context"),
                 evidence=x.get("evidence"),
@@ -241,6 +357,7 @@ class _Units(HTMLParser):
         if "data-kind" in a:
             outer = next((e["unit"] for e in reversed(self.stack) if e["unit"] is not None), None)
             unit = {"kind": a["data-kind"], "id": a.get("data-id"), "text": [], "anchors": [], "id_attr": a.get("id"),
+                    "withheld": a.get("data-withheld"),
                     "first": None, "before": False, "group": parent["group"] if parent else None, "counts": [],
                     "nested": outer is not None and (outer["kind"], a["data-kind"]) not in NESTING, "unclosed": False}
             self.found.append(unit)
@@ -319,10 +436,79 @@ def resolve(page, href):
     return target + ("#" + frag if frag else "")
 
 
-def site_units(dist):
-    """({(kind, id): [hit, ...]}, {(page, key): [stated text, ...]}, {page: [markup findings]}); a hit is a dict."""
+class _TextOut(HTMLParser):
+    """A text page's article as built: each attribute outside TEXT_OUT_ATTRS, each link that leaves the book's text
+    pages, each image (its src)."""
+
+    def __init__(self, book, chapter):
+        super().__init__(convert_charrefs=True)
+        self.book, self.chapter, self.depth, self.bad, self.images = book, chapter, 0, [], []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "article" and a.get("data-kind") == "text":
+            self.depth = 1
+            return
+        if not self.depth:
+            return
+        if tag not in VOID:
+            self.depth += 1
+        if tag not in TEXT_TAGS:
+            self.bad.append(f"<{tag}> in a chapter's text")
+        for k, v in attrs:
+            v = v or ""
+            if k not in TEXT_OUT_ATTRS:
+                self.bad.append(f"<{tag} {k}=...> in a chapter's text")
+            elif k == "class" and not set(v.split()) <= TEXT_OUT_CLASSES:
+                self.bad.append(f"class {v[:40]!r} in a chapter's text")
+            elif k == "id" and not v.startswith("c-"):
+                self.bad.append(f"id {v[:40]!r} in a chapter's text, not c-")
+            elif k == "href" and not (re.fullmatch(r"#c-[^\s\\\"<>]+", v)
+                                      or re.fullmatch(r"\.\./\.\./[a-z0-9-]+/text/index\.html#c-[^\s\\\"<>]+", v)):
+                self.bad.append(f"a link that leaves the book's text pages: {v[:40]!r}")
+            elif k == "src":
+                prefix = f"../../../../../images/{self.book}/"
+                if not v.startswith(prefix) or ".." in v[len(prefix):].split("/"):
+                    self.bad.append(f"an image from outside the book's images: {v[:40]!r}")
+                else:
+                    self.images.append(v[len("../../../../../"):])
+
+    def handle_endtag(self, tag):
+        if self.depth and tag not in VOID:
+            self.depth -= 1
+
+
+def text_pages_check(dist, export):
+    """{page: [findings]}: what the text pages hold beyond their text, and the images they use."""
+    bad, used = defaultdict(list), set()
+    for page in sorted(Path(dist).glob("books/*/ch/*/text/index.html")):
+        rel = page.relative_to(dist).as_posix()
+        book, chapter = TEXT_PAGE.match(rel).groups()
+        raw = page.read_text(encoding="utf-8")
+        if re.search(r"gutenberg", raw, re.I):
+            bad[rel].append('"gutenberg" on a text page')
+        p = _TextOut(book, chapter)
+        p.feed(raw)
+        bad[rel].extend(p.bad)
+        for src in p.images:
+            used.add(src)
+            mine, theirs = Path(dist) / src, Path(export) / src
+            if not mine.is_file() or not theirs.is_file() or mine.read_bytes() != theirs.read_bytes():
+                bad[rel].append(f"image {src} is not the export's, byte for byte")
+    for f in sorted(Path(dist).glob("images/**/*")):
+        if f.is_file() and f.relative_to(dist).as_posix() not in used:
+            bad[f.relative_to(dist).as_posix()].append("an image no text page uses")
+    return bad
+
+
+def site_units(dist, export=None):
+    """({(kind, id): [hit, ...]}, {(page, key): [stated text, ...]}, {page: [markup findings]}); a hit is a dict.
+    With the export, the text pages' own checks too (text_pages_check)."""
     out, stated, pages = defaultdict(list), defaultdict(list), defaultdict(list)
     dist = Path(dist)
+    if export is not None:
+        for rel, found in text_pages_check(dist, export).items():
+            pages[rel].extend(found)
     for css in sorted(dist.rglob("*.css")):
         if css.relative_to(dist).parts[0] == "vendor":
             continue  # KaTeX's own rules (proven upstream by vendorcheck) style only what KaTeX makes at run time;
@@ -362,7 +548,7 @@ def site_units(dist):
                 "page": rel, "text": norm("".join(u["text"])), "anchors": dict(anchors), "id_attr": u["id_attr"],
                 "first": norm("".join(u["first"] or [])), "before": u["before"], "group": u["group"],
                 "nested": u["nested"], "unclosed": u["unclosed"], "counts": defaultdict(list),
-                "fields": defaultdict(list)})
+                "fields": defaultdict(list), "withheld": u["withheld"]})
             u["hit"] = out[(u["kind"], u["id"])][-1]
         for name, text, owner in p.fields:
             if owner is None:
@@ -390,9 +576,9 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
     out = []
     for (kind, i), hits in sorted(site.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
         if kind not in KINDS:
-            out.append((kind, i, "unknown-kind", f"on {hits[0][0]}"))
+            out.append((kind, i, "unknown-kind", f"on {hits[0]['page']}"))
         elif (kind, i) not in units:
-            out.append((kind, i, "extra", f"on {hits[0][0]}, not in the export"))
+            out.append((kind, i, "extra", f"on {hits[0]['page']}, not in the export"))
     for (kind, i), want in sorted(units.items()):
         hits = site.get((kind, i), [])
         if not hits:
@@ -404,6 +590,19 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
         page, text = hit["page"], hit["text"]
         if hit["nested"] or hit["unclosed"]:
             out.append((kind, i, "markup", "inside another unit" if hit["nested"] else "its element is not closed"))
+        if kind == "text" and (want["withheld"] is not None or hit["withheld"] is not None):
+            # a chapter's text is a page, or a line on its chapter page saying why not; the oracle decides which
+            reason = WITHHELD.get(want["withheld"])
+            if want["withheld"] is None:
+                out.append((kind, i, "withheld", f"withheld ({str(hit['withheld'])[:60]}) where the export makes a page"))
+            elif hit["withheld"] is None:
+                out.append((kind, i, "withheld", f"a page where it must be withheld ({want['withheld']})"))
+            elif page != want["page"] or (reason is not None and hit["withheld"] != reason) or (
+                    reason is None and hit["withheld"] in WITHHELD.values()) or (
+                    hit["text"] != norm(f"The chapter's text is not shown yet: {hit['withheld']}.")):
+                out.append((kind, i, "withheld", f"withheld on {page} for {hit['withheld'][:60]!r}, expected "
+                                                 f"{want['page']} for {want['withheld']}"))
+            continue
         if page != want["page"]:
             out.append((kind, i, "page", f"on {page}, expected {want['page']}"))
         lost = [t for t in want["text"] if t not in text]
@@ -572,7 +771,7 @@ def control_export(export, build, mutate, refused=None):
             return None
         if r.returncode != 0:
             raise SystemExit(f"oracle export control: build failed: {r.stdout[-300:]}{r.stderr[-300:]}")
-        return site_units(out)
+        return site_units(out, copy)
 
 
 def add_edge(source_type, target, kind):
@@ -651,6 +850,72 @@ def plant_unclose(copy, i):
     page, text, (a, b) = _find(copy, "term", i)
     assert text[b:].startswith('<li class="term"'), i
     page.write_text(text[:b - len("</li>")] + text[b:], encoding="utf-8")
+
+
+def plant_after_article(copy, page_rel, html_text):
+    """Insert html_text just inside a text page's article."""
+    page = copy / page_rel
+    text = page.read_text(encoding="utf-8")
+    a = text.index('<article class="text"')
+    b = text.index(">", a) + 1
+    page.write_text(text[:b] + html_text + text[b:], encoding="utf-8")
+
+
+def plant_drop_paragraph(copy, page_rel):
+    """Remove the article's first paragraph that holds text."""
+    page = copy / page_rel
+    text = page.read_text(encoding="utf-8")
+    i = text.index('<article class="text"')
+    while True:
+        a = text.index("<p>", i)
+        b = text.index("</p>", a) + len("</p>")
+        if re.sub(r"<[^>]+>", "", text[a:b]).strip():
+            break
+        i = b
+    page.write_text(text[:a] + text[b:], encoding="utf-8")
+
+
+def plant_flip_image(copy, rel):
+    f = copy / rel
+    data = bytearray(f.read_bytes())
+    data[len(data) // 2] ^= 1
+    f.write_bytes(bytes(data))
+
+
+def plant_withhold(copy, chapter_page, text_page, cid):
+    """Say a chapter's text is withheld (as the build words it) and take its page away."""
+    page = copy / chapter_page
+    text = page.read_text(encoding="utf-8")
+    old = '<p class="read"><a href="text/index.html">Read the chapter\'s text</a></p>'
+    assert text.count(old) == 1, chapter_page
+    new = (f'<p class="withheld" data-kind="text" data-id="{html.escape(cid)}" data-withheld="no cause">'
+           "The chapter's text is not shown yet: no cause.</p>")
+    page.write_text(text.replace(old, new), encoding="utf-8")
+    (copy / text_page).unlink()
+
+
+def plant_unwithhold(copy, chapter_page, from_page, cid):
+    """Give a chapter that must be withheld a page: another text page's, with this chapter's id."""
+    page = copy / chapter_page
+    text = page.read_text(encoding="utf-8")
+    text = re.sub(r'<p class="withheld" data-kind="text"[^>]*>.*?</p>',
+                  '<p class="read"><a href="text/index.html">Read the chapter\'s text</a></p>', text, count=1, flags=re.S)
+    page.write_text(text, encoding="utf-8")
+    src = (copy / from_page).read_text(encoding="utf-8")
+    src = re.sub(r'(<article class="text" data-kind="text" data-id=")[^"]*', lambda m: m.group(1) + html.escape(cid), src)
+    out = copy / chapter_page.replace("/index.html", "/text/index.html")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(src, encoding="utf-8")
+
+
+def script_in_text(chapter):
+    def mutate(copy):
+        book = next(f for f in sorted((copy / "books").glob("*.json")) if chapter.startswith(f.stem + "/"))
+        d = json.loads(book.read_text(encoding="utf-8"))
+        c = next(c for c in d["chapters"] if c["id"] == chapter)
+        c["text_html"] = "<script>x</script>" + c["text_html"]
+        book.write_text(json.dumps(d, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return mutate
 
 
 def plant_text(copy, page_rel, old, new):
@@ -853,6 +1118,66 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ("point a jump link at the wrong group", lambda c: plant_text(c, tp, f'<a href="#g-{groups_on[0]}">', '<a href="#g-nowhere">'),
          {("page", tp, "markup")}),
     ]
+    texts = sorted(i for k, i in units if k == "text" and units[(k, i)]["withheld"] is None)
+    held = sorted(i for k, i in units if k == "text" and units[(k, i)]["withheld"] is not None)
+    if texts:
+        tx = rng.choice(texts)
+        tx_page = units[("text", tx)]["page"]
+        tx_ch = tx_page.replace("/text/index.html", "/index.html")
+        macros_want = lambda rel, cat: {("count", f"{rel} macros", cat)} if (rel, "macros") in stated else set()
+        with_img = [i for i in texts if "<img" in (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8")]
+        img_page = units[("text", rng.choice(with_img))]["page"] if with_img else None
+        img = (re.search(r'<img[^>]*src="\.\./\.\./\.\./\.\./\.\./([^"]+)"', (Path(dist) / img_page).read_text(encoding="utf-8"))
+               .group(1) if img_page else None)
+        plain = [i for i in texts if "<img" not in (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8")]
+        from_page = units[("text", rng.choice(plain))]["page"]
+        tw = rng.choice(plain)
+        tw_page = units[("text", tw)]["page"]
+        tw_ch = tw_page.replace("/text/index.html", "/index.html")
+        site_plants += [
+            ("drop a paragraph from a chapter's text", lambda c: plant_drop_paragraph(c, tx_page), {("text", tx, "content")}),
+            ("put an event handler in a chapter's text", lambda c: plant_after_article(c, tx_page, '<b onclick="x"></b>'),
+             {("page", tx_page, "markup")}),
+            ("link a chapter's text off the site", lambda c: plant_after_article(c, tx_page, '<a href="https://example.org/"></a>'),
+             {("page", tx_page, "markup")}),
+            ("put a javascript: link in a chapter's text", lambda c: plant_after_article(c, tx_page, '<a href="javascript:x"></a>'),
+             {("page", tx_page, "markup")}),
+            ("put an iframe in a chapter's text", lambda c: plant_after_article(c, tx_page, "<iframe></iframe>"),
+             {("page", tx_page, "markup")}),
+            # a book class or id that is one of the page's own: the stylesheet would clip it, site.js would overwrite it
+            ("give a chapter's text a class the site styles", lambda c: plant_after_article(c, tx_page, '<div class="graph-canvas"></div>'),
+             {("page", tx_page, "markup")}),
+            ("give a chapter's text an id the page uses", lambda c: plant_after_article(c, tx_page, '<span id="math-report"></span>'),
+             {("page", tx_page, "markup")}),
+            ("put a dialog in a chapter's text", lambda c: plant_after_article(c, tx_page, "<dialog></dialog>"),
+             {("page", tx_page, "markup")}),
+            ("name the transcription's source on a text page",
+             lambda c: plant_text(c, tx_page, '<aside class="errata-here">', '<aside class="errata-here"><p>Project Gutenberg</p>'),
+             {("page", tx_page, "markup")}),
+            # a chapter without images: withheld, its images would also be unused (the build never copies them)
+            ("withhold a chapter's text without cause", lambda c: plant_withhold(c, tw_ch, tw_page, tw),
+             {("text", tw, "withheld")} | macros_want(tw_page, "missing")),
+        ]
+        if img:
+            site_plants += [
+                ("change one bit of a text page's image", lambda c: plant_flip_image(c, img), {("page", img_page, "markup")}),
+                ("copy an image no page uses", lambda c: shutil.copyfile(c / img, c / (img + ".planted.png")),
+                 {("page", img + ".planted.png", "markup")}),
+            ]
+        else:
+            print("controls on text pages' images: NOT RUN, no text page has an image")
+        if held:
+            hx = rng.choice(held)
+            hx_ch = units[("text", hx)]["page"]
+            hx_page = hx_ch.replace("/index.html", "/text/index.html")
+            hx_macros = "data-macros" in (Path(dist) / from_page).read_text(encoding="utf-8")
+            site_plants.append(("give a page to a chapter that must be withheld",
+                                lambda c: plant_unwithhold(c, hx_ch, from_page, hx),
+                                {("text", hx, "withheld")} | ({("count", f"{hx_page} macros", "extra")} if hx_macros else set())))
+        else:
+            print("control 'give a page to a chapter that must be withheld': NOT RUN, no chapter is withheld")
+    else:
+        print("controls on chapter text pages: NOT RUN, no chapter has a text page")
     if not space_page:
         print("control 'change only the whitespace in a page's macros': NOT RUN, no book in this export has macros")
     for name, plant, want in site_plants:
@@ -860,7 +1185,7 @@ def run_controls(export, dist, units, counts, stated, build, seed):
             copy = Path(tmp) / "dist"
             shutil.copytree(dist, copy)
             plant(copy)
-            got = {(k, i, cat) for k, i, cat, _ in compare(units, counts, *site_pair(site_units(copy), stated))}
+            got = {(k, i, cat) for k, i, cat, _ in compare(units, counts, *site_pair(site_units(copy, export), stated))}
         if got != want:
             print(f"control '{name}' (seed {seed}): FAILED, planted {sorted(want)}, oracle said {sorted(got)[:5]}")
             sys.exit(2)
@@ -868,7 +1193,8 @@ def run_controls(export, dist, units, counts, stated, build, seed):
     export_plants = [
         ("drop a problem from the export", drop_problem(p4), {("problem", p4, "missing")}),
         ("drop a taught_in edge from the export", drop_edge(t4_node, t4_chapter, "taught_in"), {("term", t4, "link")}),
-    ]
+    ] + ([("put a <script> in a chapter's text_html", script_in_text(tx),
+           {("text", tx, "withheld")} | macros_want(tx_page, "missing"))] if texts else [])
     for name, mutate, want in export_plants:
         got = {(k, i, cat) for k, i, cat, _ in compare(units, counts, *site_pair(control_export(export, build, mutate), stated))}
         if got != want:
@@ -906,7 +1232,7 @@ def main():
     if a.control:
         seed = a.seed if a.seed is not None else random.SystemRandom().randrange(1 << 30)
         run_controls(a.export, a.dist, units, counts, stated, a.build, seed)
-    site, site_stated, pages = site_units(a.dist)
+    site, site_stated, pages = site_units(a.dist, a.export)
     diff = compare(units, counts, site, stated, site_stated, pages)
     print(f"export/site: {report(units, site)}")
     if diff:

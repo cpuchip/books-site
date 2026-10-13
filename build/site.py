@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import neutral  # noqa: E402
+import textpage  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 SCHEMAS = {1}
@@ -306,7 +307,7 @@ def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     data_url = f"https://raw.githubusercontent.com/cpuchip/pd-books/{pin}/export/{index_entry['file']}"
     body = f"""<h1>{e(b['title'])}</h1>
 <p class="by">{e(", ".join(b.get("authors") or []))}, {e(str(b.get("year", "")))}. {e(b.get("edition") or "")}</p>
-<section class="prov"><h2>Provenance and licence</h2>
+<section class="prov" id="provenance"><h2>Provenance and licence</h2>
 <p>Text: <a href="{e(t.get('url', ''))}">{e(t.get('source', ''))}</a>, released {e(t.get('released', ''))}.
 The transcription's licence, as it states it:</p>
 <blockquote>{e(t.get('licence_terms', ''))}</blockquote>
@@ -360,7 +361,80 @@ def render_set(s, problems):
             + "</section>")
 
 
-def render_chapter(d, c):
+def text_line(c, text_state):
+    """The chapter page's line about its text page: a link, a reason it is withheld, or nothing (no text in the
+    export)."""
+    if c["id"] not in text_state:
+        return ""
+    why = text_state[c["id"]]
+    if why is None:
+        return '<p class="read"><a href="text/index.html">Read the chapter\'s text</a></p>'
+    return (f'<p class="withheld" data-kind="text" data-id="{e(c["id"])}" data-withheld="{e(why)}">'
+            f'The chapter\'s text is not shown yet: {e(why)}.</p>')
+
+
+def render_text(d, c, clean):
+    b = d["book"]
+    title = c.get("title") or c.get("number") or "Chapter"
+    errata = [x for x in d.get("errata") or [] if x.get("chapter") == c["id"]]
+    if not d.get("errata"):
+        beside = "<p>No errata are recorded for this book.</p>"
+    elif errata:
+        beside = "<ul>" + "".join(
+            f'<li>{e(x["id"].split("/")[-1])}{", p. " + e(str(x["page"])) if x.get("page") else ""}: printed '
+            f'<code>{e(x.get("printed") or "")}</code>, corrected <code>{e(x.get("corrected") or "")}</code></li>'
+            for x in errata) + '</ul><p>Each is set out, with its evidence, on <a href="../../../index.html">the book\'s page</a>.</p>'
+    else:
+        beside = "<p>No errata are recorded for this chapter.</p>"
+    body = f"""<p class="crumb"><a href="../../../index.html">{e(b['title'])}</a> / <a href="../index.html">{e(title)}</a></p>
+<p class="n">The book's own words, changed in format only: math typeset, links between chapters, errata beside the text and
+never edited into it. <a href="../../../index.html#provenance">Where this came from</a>.</p>
+<aside class="errata-here"><h2>Errata</h2>{beside}</aside>
+<article class="text" data-kind="text" data-id="{e(c['id'])}" data-field="body">{clean}</article>"""
+    return page(f"{title} (text): {b['title']}", body, 5, math=b.get("macros") or {})
+
+
+def text_pages(d, image_ok):
+    """{chapter id: None (a page) or the reason it is withheld}, {chapter id: clean HTML}, [image paths]."""
+    b = d["book"]["id"]
+    chs = [c for c in d["chapters"] if c.get("text_html")]
+    state = {}
+    if any(not x.get("chapter") for x in d.get("errata") or []):
+        return {c["id"]: "its book's errata do not yet say which chapter each is in" for c in chs}, {}, []
+    # the page carries the book's macros (data-macros), so a macro that names the transcription's source would put
+    # that name on a text page, which Michael's ruling keeps off them
+    if re.search(r"gutenberg", json.dumps(d["book"].get("macros") or {}), re.I):
+        return {c["id"]: "its book's macros name the transcription's source" for c in chs}, {}, []
+    where = {}
+    for c in chs:
+        for i in textpage.ids_of(c["text_html"]):
+            where.setdefault(i, set()).add(c["id"])
+    targets = {h for c in chs for h in textpage.links_of(c["text_html"])}
+
+    def run(pages):
+        clean, images, out = {}, [], {}
+        for c in chs:
+            mine = set(textpage.ids_of(c["text_html"]))
+
+            def resolve(t, c=c, mine=mine):
+                if t in mine:
+                    return "self"
+                other = (where.get(t) or set()) - {c["id"]}
+                if len(other) == 1 and next(iter(other)) in pages:
+                    return f"../../{chapter_slug(b, next(iter(other)))}/text/index.html#{textpage.ID_PREFIX}{t}"
+                return None
+            html_, imgs, why = textpage.sanitize(c["text_html"], b, image_ok, resolve, 5, targets)
+            out[c["id"]] = "; ".join(why) if why else None
+            if not why:
+                clean[c["id"]] = html_
+                images.extend(imgs)
+        return out, clean, images
+    first, _, _ = run({c["id"] for c in chs})  # which chapters pass; a link resolves only to a page that exists
+    state, clean, images = run({i for i, w in first.items() if w is None})
+    return state, clean, images
+
+
+def render_chapter(d, c, text_state=None):
     by_id_x = {x["id"]: x for x in d["excerpts"]}
     by_id_q = {x["id"]: x for x in d["equations"]}
     sets = {s["id"]: s for s in d["exercise_sets"]}
@@ -373,6 +447,7 @@ def render_chapter(d, c):
     b = d["book"]
     body = f"""<p class="crumb"><a href="../../index.html">{e(b['title'])}</a></p>
 <h1>{e(c.get('title') or c.get('number') or '')}</h1>
+{text_line(c, text_state or {})}
 <section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i]) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
 <section><h2>Equations</h2><ul class="equations">{''.join((render_equation(by_id_q[i]) if by_id_q[i].get("chapter") == c["id"] else elsewhere(d, by_id_q[i], "equation")) for i in c['equations'] if i in by_id_q)}</ul></section>
 <section><h2>Problems</h2>{sections or '<p>No exercises in this chapter.</p>'}</section>"""
@@ -474,14 +549,25 @@ def build(export, out, pin, pd_books_check=True):
             for n in terms:
                 teaching.setdefault(n, set()).add(b)
         relations = index.get("relations") or []
+        withheld, n_text = [], 0
         for d in books:
             bid = d["book"]["id"]
             terms = all_terms.get(bid, {})
             related = render_relations(d, relations, names, entries, terms)
             w(f"books/{bid}/index.html", render_book(d, entries[bid], pin, generated, related, len(terms)))
             w(f"books/{bid}/terms/index.html", render_terms(d, terms, names, kinds, teaching, entries))
+            state, clean, images = text_pages(d, lambda rel: (Path(export) / rel).is_file())
+            for cid, why in sorted(state.items()):
+                if why is not None:
+                    withheld.append((cid, why))
             for c in d["chapters"]:
-                w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c))
+                w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c, state))
+                if c["id"] in clean:
+                    w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/text/index.html", render_text(d, c, clean[c["id"]]))
+                    n_text += 1
+            for rel in sorted(set(images)):
+                (dist / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(Path(export) / rel, dist / rel)
         g = compact_graph(graph, node_urls(books, all_terms))
         w("graph/graph.json", json.dumps(g, ensure_ascii=False, separators=(",", ":")))
         w("graph/index.html", render_graph_page(g, books, entries))
@@ -495,7 +581,10 @@ def build(export, out, pin, pd_books_check=True):
             shutil.rmtree(out)
         shutil.move(str(dist), str(out))
     print(f"built {out}: {len(books)} books, {sum(len(d['chapters']) for d in books)} chapter pages, "
-          f"{sum(len(d['problems']) for d in books)} problems, {sum(len(d.get('errata') or []) for d in books)} errata")
+          f"{sum(len(d['problems']) for d in books)} problems, {sum(len(d.get('errata') or []) for d in books)} errata, "
+          f"{n_text} chapter text pages, {len(withheld)} withheld")
+    for cid, why in withheld:
+        print(f"  text withheld: {cid}: {why}")
 
 
 def main():

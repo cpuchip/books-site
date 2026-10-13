@@ -134,6 +134,8 @@ class _Math(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.stack, self.latex, self.tx, self.in_main, self.buf = [], [], [], False, None
+        # a chapter text page's math: pandoc's <span class="math inline|display"> inside <article class="text">
+        self.in_article, self.mbuf, self.text_math = 0, None, []
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -142,12 +144,28 @@ class _Math(HTMLParser):
         if self.in_main and a.get("data-field") == "latex":
             self.buf = []
         is_tx = self.in_main and "tx" in (a.get("class") or "").split()
+        if tag == "article" and "text" in (a.get("class") or "").split():
+            self.in_article = 1
+        elif self.in_article and tag not in ("br", "meta", "link", "img", "hr", "input", "wbr"):
+            self.in_article += 1
+        classes = (a.get("class") or "").split()
+        if self.in_article and tag == "span" and "math" in classes and ("inline" in classes or "display" in classes):
+            self.mbuf = ([], "display" in classes)
         if tag not in ("br", "meta", "link", "img", "hr", "input", "wbr"):
             self.stack.append((tag, [] if is_tx else None))
 
     def handle_endtag(self, tag):
         if tag == "main":
             self.in_main = False
+        if self.in_article and tag not in ("br", "meta", "link", "img", "hr", "input", "wbr"):
+            self.in_article -= 1
+        if self.mbuf is not None and tag == "span":
+            tex, display = "".join(self.mbuf[0]), self.mbuf[1]
+            open_, close = ("\\[", "\\]") if display else ("\\(", "\\)")
+            if tex.startswith(open_) and tex.endswith(close):  # as site.js strips them
+                tex = tex[2:-2]
+            self.text_math.append(tex)
+            self.mbuf = None
         if self.buf is not None and tag == "code":
             self.latex.append("".join(self.buf))
             self.buf = None
@@ -162,6 +180,8 @@ class _Math(HTMLParser):
     def handle_data(self, data):
         if self.buf is not None:
             self.buf.append(data)
+        if self.mbuf is not None:
+            self.mbuf[0].append(data)
         for _, buf in self.stack:
             if buf is not None:
                 buf.append(data)
@@ -174,7 +194,7 @@ def formulas(html_text, equations_only=False):
     p.feed(html_text)
     if equations_only:
         return p.latex
-    return [aligned(t) for t in p.latex] + [s for t in p.tx for s in inline_spans(t)]
+    return [aligned(t) for t in p.latex] + [s for t in p.tx for s in inline_spans(t)] + p.text_math
 
 
 # ---- the graph the export holds -------------------------------------------------------------------------------
@@ -214,7 +234,8 @@ def run(export, dist, chromium, jobs, views=None, pages=None):
     dist = Path(dist)
     if pages is None:
         pages = sorted(p.relative_to(dist).as_posix() for p in dist.glob("books/*/index.html")) + sorted(
-            p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/index.html"))
+            p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/index.html")) + sorted(
+            p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/text/index.html"))
     views = views if views is not None else list(graph_views(export))
     out = {"math": {}, "graph": {}}
     with tempfile.TemporaryDirectory() as tmp, Server(dist) as base:
@@ -273,13 +294,25 @@ def fnv64(text):
     return f"{a:08x}{b:08x}"
 
 
+def ceiling_key(page):
+    """A book's ceiling, or its text pages' own ("<book> (text)"), so the text cannot hide behind the book."""
+    return page.split("/")[1] + (" (text)" if page.endswith("/text/index.html") else "")
+
+
+def load_ceiling(path):
+    c = json.loads(Path(path).read_text(encoding="utf-8"))
+    out = dict(c["books"])
+    out.update({f"{b} (text)": n for b, n in (c.get("text") or {}).items()})
+    return out
+
+
 def judge(export, dist, got, ceiling=None):
     bad = []
     if ceiling is not None:
         per = defaultdict(int)
         for page, val in got["math"].items():
             if val:
-                per[page.split("/")[1]] += val[1]
+                per[ceiling_key(page)] += val[1]
         for b, n in sorted(per.items()):
             if n > ceiling.get(b, 0):
                 bad.append(("math", b, f"{n} formulas shown as source, the ceiling is {ceiling.get(b, 0)}"))
@@ -339,6 +372,9 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
     bad_formula, typeset_x, no_script, too_wide = chapters[0], chapters[1], chapters[-1], chapters[-2]
     rotated = next(p for p in chapters[2:-2] if len(set(formulas((d / p).read_text(encoding="utf-8"), True))) > 1)
     wrong_macros = next(p for p in chapters[2:-2] if p != rotated)
+    texts = [p for p, v in sorted(got["math"].items()) if p.endswith("/text/index.html") and v and v[0] > 0
+             and '<span class="math inline">' in (d / p).read_text(encoding="utf-8")]
+    bad_text = texts[0] if texts else None
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "dist"
         shutil.copytree(dist, copy)
@@ -357,6 +393,9 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
 
         # 1. a formula KaTeX cannot read: one more shown as source, one fewer typeset
         edit(bad_formula, r'(<code data-field="latex">)[^<]*(</code>)', r"\1\\frac{\2")
+        # 1b. the same in a chapter's text, against the text pages' own ceiling
+        if bad_text:
+            edit(bad_text, r'(<span class="math inline">)\\\(', r"\1\\(\\frac{")
         # 2. a page whose script is gone: no report
         edit(no_script, r'<script src="[./]*site\.js"></script>', "")
         # 3. a site.js that typesets "x" for every equation: the right counts, annotations not from the page
@@ -394,7 +433,8 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         for name in ("graph-drop.js", "graph-label.js"):
             (copy / "graph" / f"{name[:-3]}.html").write_text(g.replace('src="../graph.js"', f'src="../{name}"'),
                                                              encoding="utf-8")
-        planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros])
+        planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros]
+                      + ([bad_text] if bad_text else []))
         with Server(copy) as base:
             for name in ("graph-drop", "graph-label"):
                 r = reports(dump(chromium, base + f"graph/{name}.html", 300, Path(tmp) / f"g-{name}")).get("graph") or {}
@@ -418,15 +458,24 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
     lab = planted["graph"]["graph-label"]
     if not lab or list(lab[:2]) != want or lab[2] == view_digest(export, "concepts"):
         findings.append(f"a graph with one label wrong matched the export: {lab}")
+    if bad_text:
+        base_t, base_s = got["math"][bad_text][:2]
+        if planted["math"][bad_text] is None or planted["math"][bad_text][:2] != (base_t - 1, base_s + 1):
+            findings.append(f"bad formula in a chapter's text {bad_text}: base {(base_t, base_s)}, "
+                            f"planted {planted['math'][bad_text]}")
+    else:
+        print("browser control 'a bad formula in a chapter's text': NOT RUN, no text page has inline math")
     if ceiling is not None:
-        book = bad_formula.split("/")[1]
-        merged = dict(got["math"], **{bad_formula: planted["math"][bad_formula]})
-        if not any(k == "math" and key == book for k, key, _ in judge(export, dist, {"math": merged, "graph": {}}, ceiling)):
-            findings.append(f"one more formula as source in {book} did not trip its ceiling {ceiling.get(book)}")
+        for page in [bad_formula] + ([bad_text] if bad_text else []):
+            key = ceiling_key(page)
+            merged = dict(got["math"], **{page: planted["math"][page]})
+            if not any(k == "math" and kk == key for k, kk, _ in judge(export, dist, {"math": merged, "graph": {}}, ceiling)):
+                findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)}")
     if findings:
         print("BROWSER CONTROL FAILED:", *findings, sep="\n  ")
         sys.exit(2)
-    print("browser control: RED as planted (a bad formula, over its book's ceiling; no report without the script; "
+    print("browser control: RED as planted (a bad formula, over its book's ceiling; the same in a chapter's text, over the "
+          "text pages' ceiling; no report without the script; "
           "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
           "label wrong)")
 
@@ -440,7 +489,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--ceiling", help="build/math-ceiling.json")
     a = ap.parse_args()
-    ceiling = json.loads(Path(a.ceiling).read_text(encoding="utf-8"))["books"] if a.ceiling else None
+    ceiling = load_ceiling(a.ceiling) if a.ceiling else None
     got = run(a.export, a.dist, a.chromium, a.jobs)
     if a.control:
         controls(a.export, a.dist, a.chromium, a.jobs, got, ceiling)
@@ -449,7 +498,7 @@ def main():
     source = defaultdict(int)
     for p, v in got["math"].items():
         if v:
-            source[p.split("/")[1]] += v[1]
+            source[ceiling_key(p)] += v[1]
     print(f"browser: {len(got['math'])} pages, {typeset} formulas typeset, {sum(source.values())} shown as source; "
           f"graph views {len(got['graph'])}, concept layer {got['graph'].get('concepts')}, all {got['graph'].get('all')}")
     for b, n in sorted(source.items(), key=lambda kv: -kv[1]):

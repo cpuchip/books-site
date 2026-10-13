@@ -59,3 +59,20 @@ details summary { cursor: pointer; color: var(--muted); font-size: .9rem; }
 .tex-source { border-bottom: 1px dotted var(--warn); }
 select { font: inherit; max-width: 100%; }
 .pick { min-height: 1.6em; font-family: system-ui, sans-serif; }
+/* a chapter's own text: the book's markup, kept from an allowlist (build/textpage.py); wide math and tables scroll
+   inside their own box so the page never grows wider than the window */
+article.text { overflow-wrap: anywhere; }
+article.text .math { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
+article.text .math-display { display: block; }
+article.text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+article.text td, article.text th { padding: .1rem .4rem; }
+article.text img { max-width: 100%; height: auto; }
+article.text figure { margin: 1rem 0; }
+article.text .smallcaps { font-variant: small-caps; }
+article.text .center, article.text .ta-center { text-align: center; }
+article.text .ta-left { text-align: left; }
+article.text .ta-right { text-align: right; }
+article.text .ta-justify { text-align: justify; }
+article.text section.footnotes { font-size: .92em; border-top: 1px solid var(--rule); margin-top: 2rem; }
+aside.errata-here { border-left: 3px solid var(--rule); padding-left: .8rem; margin: 1rem 0; }
+p.withheld { color: var(--muted, inherit); }

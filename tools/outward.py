@@ -88,6 +88,11 @@ def book_text(export):
         for c in d["chapters"]:
             add(c.get("title"))
             add(c.get("number"))
+            if c.get("text_html"):  # a text page shows the chapter's text nodes, each one as the export has it
+                t = _Text()
+                t.feed(c["text_html"])
+                for s in t.texts:
+                    add(s)
         for x in d["excerpts"]:
             add(x.get("markdown"))
         for x in d["equations"]:
