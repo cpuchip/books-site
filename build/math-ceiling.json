@@ -1,6 +1,6 @@
 {
- "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 30d284c. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
- "pin": "30d284ca14987a1ac634a135c072aa42f254bb2d",
+ "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 5aa3c05 (unchanged from 30d284c). The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
+ "pin": "5aa3c05178607e05c8679b77e1f9d1e421940826",
  "books": {
   "ball-mathematical-recreations-1905": 5,
   "blackburn-elements-plane-trigonometry-1863": 5,

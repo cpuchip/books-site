@@ -400,6 +400,15 @@ between chapters that few books have.
 book.macros hold math only, so no live page carries the source's name in its macros; 14 Todhunter text pages,
 212 chapters withheld (14 books held for review).
 
+**Coverage, the count the readers' findings asked for** (`tools/textcover.py EXPORT --control`): each chapter's
+`text_latex` and `text_html` reduced to words and numbers (math, comments, labels, refs, index entries and graphics
+arguments taken out); a source word is lost when the four words from it appear nowhere on the page, and runs of
+8+ lost words are reported, with the source numbers the page does not have. The control removes a paragraph and
+requires 80% of its words back. At 5aa3c05 Todhunter, the one book the readers passed, loses 0.9% of its words
+and 2 of 599 numbers; every held book loses many numbers (Whitehead 47 of 205, Planck 561 of 1,110, Hardy 1,701
+of 3,235, Wentworth's First Steps 3,093 of 3,455) and the worst lose whole passages (Plane Geometry 58.5% of its
+words). It points a reader at where to look; it does not release a book.
+
 **Not deployed yet, on review:** `tools/textholes.py EXPORT --control` counts what the converter left behind or
 dropped (math masked). At 3ed7925: 214 empty "( )" where a reference was, 126 section signs with no number, 22
 "p." with no number, 102 index entries printed as text, 52 runs of alignment TeX outside math, 195 headings that
