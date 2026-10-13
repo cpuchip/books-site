@@ -42,6 +42,7 @@ if [ -n "${CHROMIUM:-}" ]; then
 fi
 
 rm -rf "$OUT"
+mkdir -p "$(dirname "$OUT")"  # a green build is never lost to a missing parent directory at the last step
 mv "$STAGE" "$OUT"
 if [ -n "${CHROMIUM:-}" ]; then BROWSER=" (browser checked)"; else BROWSER=" (browser check NOT run: set CHROMIUM)"; fi
 echo "SITE GREEN: $OUT from pd-books $PIN${OFFLINE:+ (OFFLINE: external links and npm NOT requested)}$BROWSER"

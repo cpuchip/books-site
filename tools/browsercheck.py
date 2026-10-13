@@ -477,7 +477,11 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
             key = ceiling_key(page)
             merged = dict(got["math"], **{page: planted["math"][page]})
             if not any(k == "math" and kk == key for k, kk, _ in judge(export, dist, {"math": merged, "graph": {}}, ceiling)):
-                findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)}")
+                base_sum = sum(v[1] for p, v in got["math"].items() if v and ceiling_key(p) == key)
+                none = sorted(p for p, v in got["math"].items() if v is None and ceiling_key(p) == key)
+                findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)} "
+                                f"(base sum {base_sum}, {page} base {got['math'][page][:2]} planted "
+                                f"{(planted['math'][page] or ())[:2]}, pages without a report {none[:3]})")
     if findings:
         print("BROWSER CONTROL FAILED:", *findings, sep="\n  ")
         sys.exit(2)

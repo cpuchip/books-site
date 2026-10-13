@@ -24,7 +24,8 @@ NOT_PROSE = r"(?:label|ref|eqref|pageref|index|includegraphics|Graphic|Input|inp
             r"phantomsection|pdfbookmark|BookMark|PageSep|DPPageSep|setlength|settowidth|addtolength|vspace|hspace|" \
             r"newcommand|renewcommand|providecommand|def|let|usepackage|documentclass|begin\{tabular\}|SetRunningHeads|" \
             r"SetCenterHeads|SetCornerHeads|SetPageNumbers|fancyhead|fancyfoot|thispagestyle|pagestyle|pagenumbering)"
-MATH = re.compile(r"\$\$.*?\$\$|\$(?:\\.|[^$\\])*\$|\\\[.*?\\\]|\\\(.*?\\\)|"
+# an escaped \$ is a dollar sign, not math (the data owner's find, 2026-10-13: "\$26" flipped every later $)
+MATH = re.compile(r"(?<!\\)\$\$.*?\$\$|(?<!\\)\$(?:\\.|[^$\\])*\$|\\\[.*?\\\]|\\\(.*?\\\)|"
                   r"\\begin\{(equation|align|gather|multline|eqnarray|flalign|alignat|displaymath|math|array)\*?\}.*?"
                   r"\\end\{\1\*?\}", re.S)
 # words (letters, accented ones too) and numbers: a lost section, equation or exercise number is a lost token
@@ -48,9 +49,11 @@ def strip_braced(text, i):
     return len(text)
 
 
-def latex_words(tex):
+def latex_words(tex, math=False):
+    """The source's words (math taken out; with math=True, kept, for counting numbers wherever they stand)."""
     tex = re.sub(r"(?<!\\)%.*", "", tex)
-    tex = MATH.sub(" ", tex)
+    if not math:
+        tex = MATH.sub(" ", tex)
     # environment markers, their options and a table's column spec: not words of the book
     tex = re.sub(r"\\(?:begin|end)\{[^}]*\}(?:\[[^\]]*\])?(?:\{(?:[^{}]|\{[^{}]*\})*\})?", " ", tex)
     out, i = [], 0
@@ -73,12 +76,12 @@ def latex_words(tex):
 
 
 def accents(tex):
-    """\'e, \`a, \"o and the like as the letter they make, so a source word is not split where the page's is whole."""
+    r"""\'e, \`a, \"o and the like as the letter they make, so a source word is not split where the page's is whole."""
     return re.sub(r"\\[`'^\"~=.](?:\{([A-Za-z])\}|([A-Za-z]))", lambda m: m.group(1) or m.group(2), tex)
 
 
-def html_words(text_html):
-    h = re.sub(r'<span class="math[^"]*">.*?</span>', " ", text_html, flags=re.S)
+def html_words(text_html, math=False):
+    h = text_html if math else re.sub(r'<span class="math[^"]*">.*?</span>', " ", text_html, flags=re.S)
     h = html.unescape(re.sub(r"<[^>]+>", " ", h)).replace("\u2019", "'")
     return WORD.findall(h.lower())
 
@@ -106,6 +109,10 @@ def chapter(c):
 
 
 def control(export):
+    words = latex_words(r"A had $d$ dollars, but, after giving \$26 to B, he had one-third as many as B. How many has $x$?")
+    if words != ["a", "had", "dollars", "but", "after", "giving", "26", "to", "b", "he", "had", "one", "third", "as",
+                 "many", "as", "b", "how", "many", "has"]:
+        sys.exit(f"textcover control: FAILED, an escaped dollar read as math: {words}")
     f = sorted((Path(export) / "books").glob("*.json"))[0]
     d = json.loads(f.read_text(encoding="utf-8"))
     c = next(c for c in d["chapters"] if c.get("text_html") and len(re.findall(r"<p>", c["text_html"])) > 5)
@@ -149,8 +156,10 @@ def main():
                 continue
             src = latex_words(c.get("text_latex") or "")
             r = chapter(c)
-            page_nums = collections.Counter(w for w in html_words(c.get("text_html") or "") if w.isdigit())
-            src_nums = collections.Counter(w for w in src if w.isdigit())
+            # numbers wherever they stand, math included on both sides: a number in math on one side and in prose
+            # on the other is not lost
+            page_nums = collections.Counter(w for w in html_words(c.get("text_html") or "", math=True) if w.isdigit())
+            src_nums = collections.Counter(w for w in latex_words(c.get("text_latex") or "", math=True) if w.isdigit())
             book_nums, book_nums_lost = book_nums + sum(src_nums.values()), book_nums_lost + sum((src_nums - page_nums).values())
             lost = sum(n for n, _ in r)
             book_src, book_lost = book_src + len(src), book_lost + lost
