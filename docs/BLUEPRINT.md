@@ -395,7 +395,7 @@ Todhunter alone is released (its one results table shows as source). Two finding
 fixed: table cells broke inside numbers on a phone (3487 read as "348 / 7"), and the page's line promised links
 between chapters that few books have.
 
-**Deployed at 30d284c** (the export after #7854 and #7855): equations' unconfirmed suspicions are a separate
+**For deploy at 30d284c** (the export after #7854 and #7855): equations' unconfirmed suspicions are a separate
 `flag` field the site does not show, so no page tells a reader the book is wrong on the pipeline's word alone;
 book.macros hold math only, so no live page carries the source's name in its macros; 14 Todhunter text pages,
 212 chapters withheld (14 books held for review).
