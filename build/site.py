@@ -387,8 +387,8 @@ def render_text(d, c, clean):
     else:
         beside = "<p>No errata are recorded for this chapter.</p>"
     body = f"""<p class="crumb"><a href="../../../index.html">{e(b['title'])}</a> / <a href="../index.html">{e(title)}</a></p>
-<p class="n">The book's own words, changed in format only: math typeset, links between chapters, errata beside the text and
-never edited into it. <a href="../../../index.html#provenance">Where this came from</a>.</p>
+<p class="n">The book's own words, changed in format only: the math typeset, and errata listed beside the text, never
+edited into it. <a href="../../../index.html#provenance">Where this came from</a>.</p>
 <aside class="errata-here"><h2>Errata</h2>{beside}</aside>
 <article class="text" data-kind="text" data-id="{e(c['id'])}" data-field="body">{clean}</article>"""
     return page(f"{title} (text): {b['title']}", body, 5, math=b.get("macros") or {})
@@ -399,7 +399,12 @@ def text_pages(d, image_ok):
     b = d["book"]["id"]
     chs = [c for c in d["chapters"] if c.get("text_html")]
     state = {}
-    if any(not x.get("chapter") for x in d.get("errata") or []):
+    # a book the review held back (build/text-hold.json): its reason, as readers will read it
+    held = (json.loads((HERE / "text-hold.json").read_text(encoding="utf-8")).get("books") or {}).get(b)
+    if held:
+        return {c["id"]: held for c in chs}, {}, []
+    # an erratum with no chapter is one the text never shows (an answer at the back): printed_in_text false says so
+    if any(not x.get("chapter") and x.get("printed_in_text") is not False for x in d.get("errata") or []):
         return {c["id"]: "its book's errata do not yet say which chapter each is in" for c in chs}, {}, []
     # the page carries the book's macros (data-macros), so a macro that names the transcription's source would put
     # that name on a text page, which Michael's ruling keeps off them

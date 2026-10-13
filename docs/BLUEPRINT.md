@@ -334,7 +334,9 @@ other chapter of the same book (one that has a page) becomes a link to that page
 `<a>` and keeps its words. So footnotes read as endnotes and no link is dead.
 
 **Errata beside the text.** A book with errata gets text pages only once every erratum names its chapter, asked
-of the data owner (#7833); each page then lists its chapter's errata beside the text. A book with no errata
+of the data owner (#7833); each page then lists its chapter's errata beside the text. (Refined at 3372745: an
+erratum with no chapter is allowed when `printed_in_text` is false, the 40 errata in the books' answers at the
+back, which no chapter's text shows; it stays on the book page with the rest.) A book with no errata
 says so on each page. 12 of the 15 books have none at 3ed7925.
 
 **Math.** `site.js` typesets each `span.math` inside the text, into a new element; a formula KaTeX cannot
@@ -371,6 +373,32 @@ to it still land; link targets are read by the parser, not a regex; text that en
 (the parser drops it without a word, in the builder and the oracle alike); an image path with `%`, `\`, `?` or
 `#` is rejected; the oracle now checks the article's tags, classes and ids itself and reads the withheld line's
 words against its reason; site.js typesets only the spans browsercheck counts.
+
+**The source's name, site-wide** (`tools/outward.py`, from the 36d12bc miss): outside a book page's provenance
+and the About page, "Gutenberg" may stand only inside the export's own text or its notes on equations, and in no
+attribute anywhere. On the deployed 36d12bc this is red with 101 findings, the macros; at 3372745 it is green.
+
+**At 3372745** (the data owner's export for these findings): 226 text pages, 0 withheld; holes 45 (from about
+700); 720 of about 45k text formulas as source (ceilings measured; Ball's raised by 4, with the reason in the
+file).
+
+**The read, and the hold list** (2026-10-13, at 3372745): five readers who had not built the pages each took
+three books, compared three chapters of each word by word with `text_latex`, followed every link and took phone
+screenshots. Every book but one loses something the page would claim to show "in format only": a set of examples
+(Hardy), figures (Planck, Thompson, Slaught, Wentworth's Plane Geometry, Dickson), theorem statements and proofs
+(Plane Geometry), exercise numbers (Hardy, Thompson, Slaught, both Wentworths, Dickson), worked solutions (Boyden),
+tables (Ball, De Morgan), footnotes inside math (Hardy, Maxwell, Macfarlane), doubled dates (Whitehead). The
+pages match the export's `text_html` exactly, so the losses are the conversion's, sent to the data owner whole.
+So `build/text-hold.json` lists the books whose text pages are held, each with the reason its chapter pages
+give readers; the build withholds them and the oracle, reading the same file, requires exactly that reason.
+Todhunter alone is released (its one results table shows as source). Two findings were the site's and are
+fixed: table cells broke inside numbers on a phone (3487 read as "348 / 7"), and the page's line promised links
+between chapters that few books have.
+
+**Deployed at 30d284c** (the export after #7854 and #7855): equations' unconfirmed suspicions are a separate
+`flag` field the site does not show, so no page tells a reader the book is wrong on the pipeline's word alone;
+book.macros hold math only, so no live page carries the source's name in its macros; 14 Todhunter text pages,
+212 chapters withheld (14 books held for review).
 
 **Not deployed yet, on review:** `tools/textholes.py EXPORT --control` counts what the converter left behind or
 dropped (math masked). At 3ed7925: 214 empty "( )" where a reference was, 126 section signs with no number, 22

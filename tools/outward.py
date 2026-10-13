@@ -73,6 +73,20 @@ def allowed():
     return {l.strip() for l in f.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")}
 
 
+SOURCE = re.compile(r"gutenberg", re.I)
+
+
+def export_notes(export):
+    """The export's own notes on its equations, which may name the transcription's source (not book text, so not
+    exempt from the other rules)."""
+    out = set()
+    for f in sorted((Path(export) / "books").glob("*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8"))["equations"]:
+            if isinstance(x.get("statement"), str) and x["statement"].strip():
+                out.add(" ".join(x["statement"].split()))
+    return out
+
+
 def book_text(export):
     keep = set()
 
@@ -124,6 +138,7 @@ class _Text(HTMLParser):
 
 def check(export, dist):
     names, keep, allow = roster(), book_text(export), allowed()
+    notes = export_notes(export)
     dist = Path(dist)
     bad = []
 
@@ -148,8 +163,18 @@ def check(export, dist):
         if f.suffix == ".html":
             t = _Text()
             t.feed(f.read_text(encoding="utf-8"))
+            # the transcription's source is named on a book's own page (its provenance) and nowhere else in the
+            # site's words; elsewhere only inside the export's own text, never in an attribute (2026-10-13: the
+            # export's macros put it in 101 chapter pages' data-macros)
+            book_page = re.fullmatch(r"books/[^/]+/index\.html|about/index\.html", rel) is not None
             for s in t.texts:
                 judge(rel, s, "text")
+                if not book_page and SOURCE.search(s) and " ".join(s.split()) not in keep | notes:
+                    bad.append((rel, "the source's name outside a book page", s[:120]))
+            if not book_page:
+                for k, v in t.attrs:
+                    if SOURCE.search(v):
+                        bad.append((rel, f"the source's name in attribute {k}", v[:120]))
             for k, v in t.attrs:
                 if k in ("data-id", "id", "href", "src"):
                     # ids are the export's own and links are checked by linkcheck; the leaks still fail here
@@ -198,16 +223,24 @@ def control(export, dist):
         g = json.loads(gpath.read_text(encoding="utf-8"))
         g["nodes"][0][2] = g["nodes"][0][2] + " (abacus concurred, on seat.box.lan)"
         gpath.write_text(json.dumps(g, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        # the source's name where it may not be: a chapter page's macros, and the site's own words on one
+        ch = next(p for p in sorted((copy / "books").glob("*/ch/*/index.html")) if "<main" in p.read_text(encoding="utf-8"))
+        ct = ch.read_text(encoding="utf-8")
+        ct = re.sub(r"<main(?: data-macros=\"[^\"]*\")?>", '<main data-macros="{&quot;\\\\PGLicense&quot;: &quot;Project Gutenberg&quot;}">'
+                    '<p>From Project Gutenberg.</p>', ct, count=1)
+        ch.write_text(ct, encoding="utf-8")
         js = copy / "site.js"
         js.write_text(js.read_text(encoding="utf-8") + "\n// ghp_" + "x" * 36 + "\n", encoding="utf-8")
         got = sorted(why.split(" in ")[0] if why.startswith("seat") else why for _, why, _ in check(export, copy))
     want = sorted(["seat name 'qwenniverse-fermion'", "seat name 'tutor'", "em-dash", "seat name 'abacus'", "claude.ai link",
-                   "private address", "local path", "internal hostname", "token"])
+                   "private address", "local path", "internal hostname", "token",
+                   "the source's name in attribute data-macros", "the source's name outside a book page"])
     if got != want:
-        print(f"OUTWARD CONTROL FAILED: planted {want}, checker said {got[:8]}")
+        print(f"OUTWARD CONTROL FAILED: planted {want}, checker said {got}")
         sys.exit(2)
     print("outward control: RED as planted (seat names in a class, evidence and a graph node; an em-dash; a claude.ai link;"
-          " a private address, a local path, an internal hostname, a token)")
+          " a private address, a local path, an internal hostname, a token; the source's name in a chapter page's macros"
+          " and in its own words)")
 
 
 def main():
@@ -224,7 +257,7 @@ def main():
     if bad:
         print(f"OUTWARD RED: {len(bad)} findings")
         sys.exit(1)
-    print("OUTWARD GREEN: no seat names or em-dashes outside the book's own text; no claude.ai links, private addresses,"
+    print("OUTWARD GREEN: no seat names or em-dashes outside the book's own text; the source named only on book and about pages and in the export's own text; no claude.ai links, private addresses,"
           " internal hostnames, local paths or tokens anywhere")
 
 

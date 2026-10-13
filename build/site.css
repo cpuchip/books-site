@@ -66,6 +66,9 @@ article.text .math { display: inline-block; max-width: 100%; overflow-x: auto; o
 article.text .math-display { display: block; }
 article.text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 article.text td, article.text th { padding: .1rem .4rem; }
+/* a table scrolls in its own box, so its cells break only between words: never inside a number (Maxwell's 3487 read
+   as "348 / 7" at phone width with the article's anywhere rule) */
+article.text table, article.text table * { overflow-wrap: normal; word-break: normal; }
 article.text img { max-width: 100%; height: auto; }
 article.text figure { margin: 1rem 0; }
 article.text .smallcaps { font-variant: small-caps; }

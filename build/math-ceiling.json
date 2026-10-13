@@ -1,16 +1,16 @@
 {
- "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 3ed7925. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
- "pin": "3ed7925eb7a531d5e20a4fb9dff6ccc54c84ec34",
+ "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 30d284c. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
+ "pin": "30d284ca14987a1ac634a135c072aa42f254bb2d",
  "books": {
   "ball-mathematical-recreations-1905": 5,
   "blackburn-elements-plane-trigonometry-1863": 5,
   "boyden-first-book-in-algebra-1895": 7,
-  "de-morgan-elementary-illustrations-calculus-1899": 6,
-  "dickson-theory-of-equations-1922": 40,
+  "de-morgan-elementary-illustrations-calculus-1899": 3,
+  "dickson-theory-of-equations-1922": 31,
   "hardy-course-of-pure-mathematics-1921": 32,
   "macfarlane-vector-analysis-quaternions-1906": 0,
   "maxwell-elementary-treatise-electricity-1888": 0,
-  "planck-treatise-on-thermodynamics-1903": 40,
+  "planck-treatise-on-thermodynamics-1903": 1,
   "slaught-lennes-solid-geometry-1919": 5,
   "thompson-calculus-made-easy-1914": 1,
   "todhunter-spherical-trigonometry-1886": 3,
@@ -20,16 +20,25 @@
  },
  "history": {
   "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)",
-  "all": "lowered on 2026-10-13 from 1,066 in all at b3c614f to 147 at 3ed7925, when the export gained each book's macros and lost the producer markup; no book went up"
+  "all": "lowered on 2026-10-13 from 1,066 in all at b3c614f to 147 at 3ed7925, when the export gained each book's macros and lost the producer markup; no book went up",
+  "ball-mathematical-recreations-1905 (text)": "27 to 31 on 2026-10-13 at 3372745: Ball's LRalign alignments, which leaked out of math as plain text at 3ed7925 (25 runs of & outside math), are math now, so more of the text reaches KaTeX; 7 more fail on Ball's own \\\\Therefore, which the book's macros do not define, and 1 on \\\\addlinespace (asked of the data owner)"
  },
- "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3ed7925 on the 69 pages built then; a book not listed is held to 0, and a book whose text pages are withheld has none).",
+ "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3372745, the first export where every chapter with text has a page; a released book's re-measured at each pin, 30d284c for Todhunter; a book held in build/text-hold.json keeps its last measure until it is released; a book not listed is held to 0).",
  "text": {
-  "ball-mathematical-recreations-1905": 27,
-  "dickson-theory-of-equations-1922": 239,
-  "macfarlane-vector-analysis-quaternions-1906": 28,
-  "maxwell-elementary-treatise-electricity-1888": 30,
-  "slaught-lennes-solid-geometry-1919": 88,
-  "todhunter-spherical-trigonometry-1886": 116,
-  "wentworth-plane-geometry-1899": 16
+  "ball-mathematical-recreations-1905": 31,
+  "blackburn-elements-plane-trigonometry-1863": 14,
+  "boyden-first-book-in-algebra-1895": 17,
+  "de-morgan-elementary-illustrations-calculus-1899": 22,
+  "dickson-theory-of-equations-1922": 233,
+  "hardy-course-of-pure-mathematics-1921": 66,
+  "macfarlane-vector-analysis-quaternions-1906": 4,
+  "maxwell-elementary-treatise-electricity-1888": 8,
+  "planck-treatise-on-thermodynamics-1903": 131,
+  "slaught-lennes-solid-geometry-1919": 53,
+  "thompson-calculus-made-easy-1914": 32,
+  "todhunter-spherical-trigonometry-1886": 21,
+  "wentworth-first-steps-in-algebra-1894": 57,
+  "wentworth-plane-geometry-1899": 15,
+  "whitehead-introduction-to-mathematics-1911": 3
  }
 }

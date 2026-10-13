@@ -27,6 +27,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
@@ -242,10 +243,14 @@ def run(export, dist, chromium, jobs, views=None, pages=None):
         def one(job):
             what, key, url, budget = job
             profile = Path(tmp) / f"p{threading.get_ident()}"
+            t0 = time.monotonic()
             try:
                 r = reports(dump(chromium, base + url, budget, profile)).get(what)
             except subprocess.TimeoutExpired:
                 r = None  # no report: red, named by judge()
+                # said here as well, so a hang is told apart from a page whose script did not run (2026-10-13: two
+                # hangs in a day, each on a page that renders in seconds alone)
+                print(f"browser: {url} timed out after {time.monotonic() - t0:.0f} s", flush=True)
             if what == "math":
                 return what, key, (int(r["typeset"]), int(r["source"]), int(r.get("overflow", -1)),
                                    r["annotations"], r["equations"], r.get("macros-used")) if r and "typeset" in r else None
@@ -449,7 +454,9 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                        (too_wide, "a line nothing can break"), (rotated, "each equation typeset from the next")):
         if ("math", page) not in found:
             findings.append(f"{what} ({page}) passed")
-    if not any(k == "math" and key == wrong_macros and "KaTeX was given macros" in msg for k, key, msg in judged):
+    if planted["math"].get(wrong_macros) is None:
+        findings.append(f"a page handing KaTeX macros the export does not have ({wrong_macros}): no report, so not judged")
+    elif not any(k == "math" and key == wrong_macros and "KaTeX was given macros" in msg for k, key, msg in judged):
         findings.append(f"a page handing KaTeX macros the export does not have ({wrong_macros}) passed")
     want = graph_views(export)["concepts"]
     drop = planted["graph"]["graph-drop"]

@@ -90,8 +90,8 @@ TEXT_TAGS = {"a", "blockquote", "br", "caption", "div", "em", "figcaption", "fig
              "tr", "ul"}
 TEXT_IN_ATTRS = {"id", "class", "style", "colspan", "rowspan", "src", "alt", "href", "role", "data-label",
                  "data-latex-placement"}
-TEXT_STYLE = re.compile(r"\s*(?:text-align:\s*(?:left|center|right|justify)|width:\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt))"
-                        r"\s*;?\s*\Z")
+TEXT_STYLE = re.compile(r"\s*text-align:\s*(?:left|center|right|justify)\s*;?\s*\Z"
+                        r"|(?:\s*(?:width|height):\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*(?:;|\Z))+\s*\Z")
 # what a text page's article may carry, once written again: these attributes; classes from this list (or ta-*, the
 # alignment); every id and fragment with the c- prefix, so no book id can be one the page itself uses
 TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan"}
@@ -155,12 +155,23 @@ class _TextIn(HTMLParser):
         self.bad.append("processing instruction")
 
 
-def text_expectation(export, d):
-    """{chapter id: ("page", its text) or ("withheld", "errata" | "macros" | "markup")} for each chapter that has
-    text_html: what the site must do with it, decided here from the export alone."""
+HOLD = Path(__file__).resolve().parent.parent / "build" / "text-hold.json"
+
+
+def held_reasons():
+    return set((json.loads(HOLD.read_text(encoding="utf-8")).get("books") or {}).values())
+
+
+def text_expectation(export, d, hold=None):
+    """{chapter id: ("page", its text) or ("withheld", "errata" | "macros" | "markup" | "hold:<reason>")} for each
+    chapter that has text_html: what the site must do with it, decided here from the export and the review's hold
+    list (build/text-hold.json) alone."""
     bid = d["book"]["id"]
     chs = [c for c in d["chapters"] if c.get("text_html")]
-    if any(not x.get("chapter") for x in d.get("errata") or []):
+    held = (hold if hold is not None else (json.loads(HOLD.read_text(encoding="utf-8")).get("books") or {})).get(bid)
+    if held:
+        return {c["id"]: ("withheld", "hold:" + held) for c in chs}
+    if any(not x.get("chapter") and x.get("printed_in_text") is not False for x in d.get("errata") or []):
         return {c["id"]: ("withheld", "errata") for c in chs}
     if re.search(r"gutenberg", json.dumps(d["book"].get("macros") or {}), re.I):
         return {c["id"]: ("withheld", "macros") for c in chs}
@@ -592,13 +603,14 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
             out.append((kind, i, "markup", "inside another unit" if hit["nested"] else "its element is not closed"))
         if kind == "text" and (want["withheld"] is not None or hit["withheld"] is not None):
             # a chapter's text is a page, or a line on its chapter page saying why not; the oracle decides which
-            reason = WITHHELD.get(want["withheld"])
+            reason = (want["withheld"][5:] if str(want["withheld"]).startswith("hold:")
+                      else WITHHELD.get(want["withheld"]))
             if want["withheld"] is None:
                 out.append((kind, i, "withheld", f"withheld ({str(hit['withheld'])[:60]}) where the export makes a page"))
             elif hit["withheld"] is None:
                 out.append((kind, i, "withheld", f"a page where it must be withheld ({want['withheld']})"))
             elif page != want["page"] or (reason is not None and hit["withheld"] != reason) or (
-                    reason is None and hit["withheld"] in WITHHELD.values()) or (
+                    reason is None and (hit["withheld"] in WITHHELD.values() or hit["withheld"] in held_reasons())) or (
                     hit["text"] != norm(f"The chapter's text is not shown yet: {hit['withheld']}.")):
                 out.append((kind, i, "withheld", f"withheld on {page} for {hit['withheld'][:60]!r}, expected "
                                                  f"{want['page']} for {want['withheld']}"))

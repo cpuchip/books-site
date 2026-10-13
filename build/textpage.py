@@ -22,7 +22,8 @@ ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:*-]*\Z")
 # the only styles the census found; text-align becomes a class (ta-left ...), a width is dropped, so no style attribute
 # ships (the oracle refuses any, as markup that could hide text) and site.css keeps every image inside the page
 ALIGN = re.compile(r"\s*text-align:\s*(left|center|right|justify)\s*;?\s*\Z")
-WIDTH = re.compile(r"\s*width:\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*;?\s*\Z")
+# a style of sizes only (width, height; one or more declarations): dropped
+WIDTH = re.compile(r"(?:\s*(?:width|height):\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*(?:;|\Z))+\s*\Z")
 SPAN = re.compile(r"[1-9][0-9]?\Z")
 
 

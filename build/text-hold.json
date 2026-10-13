@@ -1,0 +1,19 @@
+{
+ "_": "Books whose chapter text pages the review held back, each with the reason its chapter pages give readers. Both the build and the oracle read this file. A book comes off the list when an export fixes what its reason names and a read of its pages agrees; the commit that takes it off says so. Written 2026-10-13 from a read of three chapters of every book against text_latex, at pd-books 3372745; Todhunter alone was released (one table shown as source).",
+ "books": {
+  "ball-mathematical-recreations-1905": "the conversion still prints LaTeX in its section headings and drops the Mersenne and Chinese-rings tables, so its text is held until that is fixed",
+  "blackburn-elements-plane-trigonometry-1863": "the conversion still drops parts of the book (equation, definition and paragraph numbers, and a table), so its text is held until that is fixed",
+  "boyden-first-book-in-algebra-1895": "the conversion still drops parts of the book (the words and equals signs of its worked solutions, and the square-root illustration), so its text is held until that is fixed",
+  "de-morgan-elementary-illustrations-calculus-1899": "the conversion still drops parts of the book (the table of expansions, figure numbers and two footnotes), so its text is held until that is fixed",
+  "dickson-theory-of-equations-1922": "the conversion still drops parts of the book (equation references, section headings, exercise numbers and figures), so its text is held until that is fixed",
+  "hardy-course-of-pure-mathematics-1921": "the conversion still drops parts of the book (a set of examples, theorem labels, exercise numbers and footnotes), so its text is held until that is fixed",
+  "macfarlane-vector-analysis-quaternions-1906": "the conversion still drops parts of the book (three footnotes), so its text is held until that is fixed",
+  "maxwell-elementary-treatise-electricity-1888": "the conversion still drops parts of the book (figure captions, footnotes, page numbers and Greek letters in headings), so its text is held until that is fixed",
+  "planck-treatise-on-thermodynamics-1903": "the conversion still drops parts of the book (its figures, figure numbers and chapter headings), so its text is held until that is fixed",
+  "slaught-lennes-solid-geometry-1919": "the conversion still drops parts of the book (section numbers, the given half of each theorem, exercise numbers and figures), so its text is held until that is fixed",
+  "thompson-calculus-made-easy-1914": "the conversion still drops parts of the book (its figures, exercise numbers and page references), so its text is held until that is fixed",
+  "wentworth-first-steps-in-algebra-1894": "the conversion still drops parts of the book (its exercise numbers), and its errata are not yet placed in the right chapters, so its text is held until that is fixed",
+  "wentworth-plane-geometry-1899": "the conversion still drops parts of the book (theorem statements, proofs, defined terms and figures), so its text is held until that is fixed",
+  "whitehead-introduction-to-mathematics-1911": "the conversion prints each date's B.C. or A.D. twice and gives labels in place of page numbers, so its text is held until that is fixed"
+ }
+}
