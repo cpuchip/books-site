@@ -103,7 +103,9 @@ keys), 135 errata, graph 19,904 nodes and 58,517 links.
    required to come back with exactly its planted findings. Removing the shared-name check, or narrowing the
    hiding rule to the `hidden` attribute, makes a control fail (checked 2026-10-10 on broken copies of the oracle).
    Two more for the fields: blank a problem whose printed answer repeats its text; blank an erratum's printed text
-   that its context holds. 34 in all.
+   that its context holds. One for the macros: change only the whitespace inside one macro's value, which must be
+   red, because KaTeX receives those bytes (it runs when the export has macros, and the run says NOT RUN when it
+   has none). 35 in all, plus the two refusals; each run prints every control by name.
 2. **Links.** `tools/linkcheck.py DIST`: every internal href and src names a file (and fragment) in dist; an
    empty href or a bare `#` fails; every page is reachable from the shelf; every external URL answers 2xx/3xx
    (`--offline` for development only, and the build's last line says so). Controls: a missing file, a missing
@@ -249,7 +251,10 @@ from the graph page.
    (concept layer, everything, each book): the node and link counts and a digest of every node's id, label and
    link and every link's ends, against the same computed from the export. Controls: a bad formula (one more as
    source, over its ceiling), a page without its script, equations typeset from other text, a page too wide, a
-   graph one node short, a graph with one label wrong. The browser check runs in the Linux rehearsal before any deploy (`CHROMIUM=path`); a build
+   graph one node short, a graph with one label wrong, and a page that hands KaTeX macros the export does not have
+   (one harmless extra, so it is the macros comparison that fires). The report's attributes are read back
+   unescaped: the DOM dump writes a quote as `&quot;`, which no macro-free export had shown (found 2026-10-13 on
+   pd-books 7c27037, the first export with macros). The browser check runs in the Linux rehearsal before any deploy (`CHROMIUM=path`); a build
    without it says so on its last line, as `OFFLINE` does.
 3. linkcheck also reads `url()` in served CSS (KaTeX's fonts) and `<script src>`.
 4. outward skips `vendor/` (third-party code, proven byte-identical to upstream by check 1) except the two files

@@ -372,6 +372,8 @@ def site_units(dist):
         for key, text, owner, group in p.counts:
             if owner is not None:
                 owner["hit"]["counts"][key].append(norm("".join(text)))
+            elif key == "macros":  # KaTeX gets these bytes: compared exactly, never whitespace-normalized
+                stated[(rel, key)].append("".join(text))
             else:
                 stated[(rel, f"group:{group}" if key == "group" else key)].append(norm("".join(text)))
     return out, stated, pages
@@ -658,6 +660,37 @@ def plant_text(copy, page_rel, old, new):
     page.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def plant_macros(copy, page_rel, value):
+    """Give a page these macros: replace its data-macros, or add one to a page that has none."""
+    page = copy / page_rel
+    text = page.read_text(encoding="utf-8")
+    if 'data-macros="' in text:
+        start = text.index('data-macros="') + len('data-macros="')
+        text = text[:start] + value + text[text.index('"', start):]
+    else:
+        assert "<main>" in text, page_rel
+        text = text.replace("<main>", f'<main data-macros="{value}">', 1)
+    page.write_text(text, encoding="utf-8")
+
+
+def plant_macro_space(copy, page_rel):
+    """Double one space inside a macro's value: the same macros to a reader, a different definition to KaTeX."""
+    import html as _html
+    page = copy / page_rel
+    text = page.read_text(encoding="utf-8")
+    start = text.index('data-macros="') + len('data-macros="')
+    end = text.index('"', start)
+    macros = json.loads(_html.unescape(text[start:end]))
+    spaced = [k for k in sorted(macros) if " " in macros[k]]
+    if spaced:
+        macros[spaced[0]] = macros[spaced[0]].replace(" ", "  ", 1)
+    else:  # no value holds a space: add one, still a different definition to KaTeX
+        first = sorted(macros)[0]
+        macros[first] = " " + macros[first]
+    value = _html.escape(json.dumps(macros, ensure_ascii=False, sort_keys=True), quote=True)
+    page.write_text(text[:start] + value + text[end:], encoding="utf-8")
+
+
 def plant_before_name(copy, i):
     page, text, (a, b) = _find(copy, "term", i)
     el = text[a:b]
@@ -763,6 +796,8 @@ def run_controls(export, dist, units, counts, stated, build, seed):
             by_page[units[(k, i)]["page"]].append(i)
     x1, x2 = rng.sample(rng.choice(sorted(v for v in by_page.values() if len(v) >= 2)), 2)
     tp = rng.choice(sorted({terms_page(i) for i in terms}))
+    with_macros = sorted(k[0] for k, v in stated.items() if k[1] == "macros" and json.loads(v))
+    space_page = with_macros[0] if with_macros else None
     macro_page = rng.choice(sorted({units[(k, i)]["page"] for k, i in units if k == "equation" and "/ch/" in units[(k, i)]["page"]}))
     groups_on = sorted({units[("term", i)]["group"] for i in terms if terms_page(i) == tp})
     book_of = lambda i: f"books/{i.split('/')[0]}/index.html"
@@ -811,12 +846,15 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ("cut a page off inside its last term", lambda c: plant_truncate(c, t13),
          {("term", t13, "markup"), ("term", t13, "link"), ("page", terms_page(t13), "markup")}),
         ("nest an excerpt inside another", lambda c: plant_nest(c, x1, x2), {("excerpt", x1, "markup")}),
-        ("give a page macros the export does not", lambda c: plant_text(c, macro_page, "<main>",
-                                                                        '<main data-macros="{&quot;\\\\frac&quot;: &quot;\\\\binom&quot;}">'),
+        ("give a page macros the export does not", lambda c: plant_macros(c, macro_page, '{&quot;\\\\frac&quot;: &quot;\\\\binom&quot;}'),
          {("count", f"{macro_page} macros", "extra" if (macro_page, "macros") not in stated else "macros")}),
+    ] + ([("change only the whitespace in a page's macros", lambda c: plant_macro_space(c, space_page),
+           {("count", f"{space_page} macros", "macros")})] if space_page else []) + [
         ("point a jump link at the wrong group", lambda c: plant_text(c, tp, f'<a href="#g-{groups_on[0]}">', '<a href="#g-nowhere">'),
          {("page", tp, "markup")}),
     ]
+    if not space_page:
+        print("control 'change only the whitespace in a page's macros': NOT RUN, no book in this export has macros")
     for name, plant, want in site_plants:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "dist"

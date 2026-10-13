@@ -77,7 +77,8 @@ def dump(chromium, url, budget, profile, timeout=240):
 
 
 def reports(dom):
-    out = {k: dict(ATTR.findall(attrs)) for k, attrs in REPORT.findall(dom)}
+    # the DOM dump escapes attribute values (a quote is &quot;), so a report is read back unescaped
+    out = {k: {n: html.unescape(v) for n, v in ATTR.findall(attrs)} for k, attrs in REPORT.findall(dom)}
     if "math" in out:
         main = dom[dom.find("<main"):dom.rfind("</main>")]
         out["math"]["annotations"] = [html.unescape(a) for a in ANNOTATION.findall(main)]
@@ -331,12 +332,13 @@ def judge(export, dist, got, ceiling=None):
 
 
 def controls(export, dist, chromium, jobs, got, ceiling=None):
-    """Six faults, each on its own page or its own copy of a script, in one copy of the site."""
+    """The planted faults, each on its own page or its own copy of a script, in one copy of the site."""
     d = Path(dist)
     chapters = [p for p, v in sorted(got["math"].items()) if "/ch/" in p and v and v[0] > 0
                 and 'data-field="latex"' in (d / p).read_text(encoding="utf-8")]
     bad_formula, typeset_x, no_script, too_wide = chapters[0], chapters[1], chapters[-1], chapters[-2]
     rotated = next(p for p in chapters[2:-2] if len(set(formulas((d / p).read_text(encoding="utf-8"), True))) > 1)
+    wrong_macros = next(p for p in chapters[2:-2] if p != rotated)
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "dist"
         shutil.copytree(dist, copy)
@@ -370,6 +372,16 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         assert "var all" in rot
         (copy / "site-rot.js").write_text(rot, encoding="utf-8")
         edit(rotated, r'(<script src="[./]*)site\.js(">)', r"\1site-rot.js\2")
+        # 3c. a page that hands KaTeX macros the export does not have (one harmless extra, so nothing else changes)
+        mt = (copy / wrong_macros).read_text(encoding="utf-8")
+        if 'data-macros="' in mt:
+            a = mt.index('data-macros="') + len('data-macros="'); b = mt.index('"', a)
+            m = json.loads(html.unescape(mt[a:b]))
+            m["\\planted"] = "x"
+            mt = mt[:a] + html.escape(json.dumps(m, ensure_ascii=False, sort_keys=True), quote=True) + mt[b:]
+        else:
+            mt = mt.replace("<main>", '<main data-macros="{&quot;\\\\planted&quot;: &quot;x&quot;}">', 1)
+        (copy / wrong_macros).write_text(mt, encoding="utf-8")
         # 4. a line nothing can break: the page wider than the window
         edit(too_wide, "</main>", "<p>" + "w" * 3000 + "</p></main>", regex=False)
         # 5. a graph that loses one node and its links (a consistent graph, one node short)
@@ -382,12 +394,13 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         for name in ("graph-drop.js", "graph-label.js"):
             (copy / "graph" / f"{name[:-3]}.html").write_text(g.replace('src="../graph.js"', f'src="../{name}"'),
                                                              encoding="utf-8")
-        planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated])
+        planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros])
         with Server(copy) as base:
             for name in ("graph-drop", "graph-label"):
                 r = reports(dump(chromium, base + f"graph/{name}.html", 300, Path(tmp) / f"g-{name}")).get("graph") or {}
                 planted["graph"][name] = (int(r["nodes"]), int(r["links"]), r.get("digest")) if "nodes" in r else None
-        found = {(k, key) for k, key, _ in judge(export, copy, {"math": planted["math"], "graph": {}}, ceiling)}
+        judged = judge(export, copy, {"math": planted["math"], "graph": {}}, ceiling)
+        found = {(k, key) for k, key, _ in judged}
     findings = []
     base_t, base_s = got["math"][bad_formula][:2]
     if planted["math"][bad_formula] is None or planted["math"][bad_formula][:2] != (base_t - 1, base_s + 1):
@@ -396,6 +409,8 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                        (too_wide, "a line nothing can break"), (rotated, "each equation typeset from the next")):
         if ("math", page) not in found:
             findings.append(f"{what} ({page}) passed")
+    if not any(k == "math" and key == wrong_macros and "KaTeX was given macros" in msg for k, key, msg in judged):
+        findings.append(f"a page handing KaTeX macros the export does not have ({wrong_macros}) passed")
     want = graph_views(export)["concepts"]
     drop = planted["graph"]["graph-drop"]
     if not drop or drop[0] != want[0] - 1:
@@ -412,7 +427,7 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         print("BROWSER CONTROL FAILED:", *findings, sep="\n  ")
         sys.exit(2)
     print("browser control: RED as planted (a bad formula, over its book's ceiling; no report without the script; "
-          "equations typeset from other text; equations out of order; a page too wide; the graph one node short; one "
+          "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
           "label wrong)")
 
 
