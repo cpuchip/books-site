@@ -79,3 +79,7 @@ article.text .ta-justify { text-align: justify; }
 article.text section.footnotes { font-size: .92em; border-top: 1px solid var(--rule); margin-top: 2rem; }
 aside.errata-here { border-left: 3px solid var(--rule); padding-left: .8rem; margin: 1rem 0; }
 p.withheld { color: var(--muted, inherit); }
+/* an equation's number follows its formula on the line, never pinned to the box's right edge: KaTeX pins it with
+   position:absolute, and a formula wider than its scrolling box then runs under the number ("68,4(50)cal.", measured
+   2026-10-13 on Planck and on the released Todhunter); main raises the specificity over katex.min.css, loaded after */
+main .katex-display > .katex > .katex-html > .katex-tag { position: static; margin-left: 1.5em; }

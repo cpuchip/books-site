@@ -253,7 +253,8 @@ def run(export, dist, chromium, jobs, views=None, pages=None):
                 print(f"browser: {url} timed out after {time.monotonic() - t0:.0f} s", flush=True)
             if what == "math":
                 return what, key, (int(r["typeset"]), int(r["source"]), int(r.get("overflow", -1)),
-                                   r["annotations"], r["equations"], r.get("macros-used")) if r and "typeset" in r else None
+                                   r["annotations"], r["equations"], r.get("macros-used"),
+                                   int(r.get("tag-overlap", -1))) if r and "typeset" in r else None
             if not (r and r.get("view") == key and "nodes" in r):
                 return what, key, None
             return what, key, (int(r["nodes"]), int(r["links"]), r.get("digest"))
@@ -326,7 +327,7 @@ def judge(export, dist, got, ceiling=None):
         if val is None:
             bad.append(("math", page, "no math report: the page's scripts did not run"))
             continue
-        typeset, source, overflow, notes, equations, macros_used = val
+        typeset, source, overflow, notes, equations, macros_used, tag_overlap = val
         book = json.loads((Path(export) / "books" / f"{page.split('/')[1]}.json").read_text(encoding="utf-8"))["book"]
         if macros_used is None or json.loads(macros_used) != (book.get("macros") or {}):
             bad.append(("math", page, f"KaTeX was given macros {str(macros_used)[:60]}, the export has "
@@ -355,6 +356,9 @@ def judge(export, dist, got, ceiling=None):
         if len(notes) != typeset or strangers:
             bad.append(("math", page, f"{len(notes)} annotations for {typeset} typeset; "
                                       f"{len(strangers)} not from the page, e.g. {strangers[:1]}"))
+        if tag_overlap != 0:
+            bad.append(("math", page, f"{tag_overlap} equation numbers drawn over their formulas"
+                                      if tag_overlap > 0 else "no tag-overlap count in the report"))
         if overflow != 0:
             bad.append(("math", page, f"wider than a {WINDOW.split(',')[0]}px window by {overflow}px"))
     views = graph_views(export)
@@ -380,6 +384,9 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
     texts = [p for p, v in sorted(got["math"].items()) if p.endswith("/text/index.html") and v and v[0] > 0
              and '<span class="math inline">' in (d / p).read_text(encoding="utf-8")]
     bad_text = texts[0] if texts else None
+    # the page with the most equation numbers, for a stylesheet that pins them back to the right edge
+    tagged = sorted(((d / p).read_text(encoding="utf-8").count("\\tag"), p) for p in got["math"] if got["math"][p])
+    pinned = tagged[-1][1] if tagged and tagged[-1][0] >= 3 and tagged[-1][1] not in (bad_text,) else None
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / "dist"
         shutil.copytree(dist, copy)
@@ -426,6 +433,12 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         else:
             mt = mt.replace("<main>", '<main data-macros="{&quot;\\\\planted&quot;: &quot;x&quot;}">', 1)
         (copy / wrong_macros).write_text(mt, encoding="utf-8")
+        # 3d. equation numbers pinned to the right edge again (KaTeX's own rule), so wide formulas run under them
+        if pinned:
+            css = (copy / "site.css").read_text(encoding="utf-8")
+            (copy / "site-pinned.css").write_text(css + "\nmain .katex-display > .katex > .katex-html > .katex-tag "
+                                                  "{ position: absolute; right: 0; margin-left: 0; }\n", encoding="utf-8")
+            edit(pinned, r'(<link rel="stylesheet" href="[./]*)site\.css(">)', r"\1site-pinned.css\2")
         # 4. a line nothing can break: the page wider than the window
         edit(too_wide, "</main>", "<p>" + "w" * 3000 + "</p></main>", regex=False)
         # 5. a graph that loses one node and its links (a consistent graph, one node short)
@@ -439,7 +452,7 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
             (copy / "graph" / f"{name[:-3]}.html").write_text(g.replace('src="../graph.js"', f'src="../{name}"'),
                                                              encoding="utf-8")
         planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros]
-                      + ([bad_text] if bad_text else []))
+                      + ([bad_text] if bad_text else []) + ([pinned] if pinned else []))
         with Server(copy) as base:
             for name in ("graph-drop", "graph-label"):
                 r = reports(dump(chromium, base + f"graph/{name}.html", 300, Path(tmp) / f"g-{name}")).get("graph") or {}
@@ -454,6 +467,10 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                        (too_wide, "a line nothing can break"), (rotated, "each equation typeset from the next")):
         if ("math", page) not in found:
             findings.append(f"{what} ({page}) passed")
+    if pinned is None:
+        print("browser control 'equation numbers pinned over their formulas': NOT RUN, no page has 3 or more")
+    elif not any(k == "math" and key == pinned and "equation numbers drawn over" in msg for k, key, msg in judged):
+        findings.append(f"equation numbers pinned back over their formulas ({pinned}) passed")
     if planted["math"].get(wrong_macros) is None:
         findings.append(f"a page handing KaTeX macros the export does not have ({wrong_macros}): no report, so not judged")
     elif not any(k == "math" and key == wrong_macros and "KaTeX was given macros" in msg for k, key, msg in judged):
@@ -486,7 +503,7 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         print("BROWSER CONTROL FAILED:", *findings, sep="\n  ")
         sys.exit(2)
     print("browser control: RED as planted (a bad formula, over its book's ceiling; the same in a chapter's text, over the "
-          "text pages' ceiling; no report without the script; "
+          "text pages' ceiling; equation numbers pinned over their formulas; no report without the script; "
           "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
           "label wrong)")
 

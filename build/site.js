@@ -57,10 +57,26 @@
     }
   });
   var typeset = document.querySelectorAll("main .katex").length;
+  // an equation number drawn over its formula's glyphs: the browser check requires none
+  var tagOverlap = 0;
+  Array.prototype.forEach.call(document.querySelectorAll("main .katex-tag"), function (tag) {
+    var tb = tag.getBoundingClientRect(), html = tag.closest(".katex-html");
+    var glyphs = html ? html.querySelectorAll(".mord, .mrel, .mbin, .mpunct, .mopen, .mclose, .mop, .minner") : [];
+    for (var i = 0; i < glyphs.length; i++) {
+      var g = glyphs[i];
+      if (tag.contains(g) || !g.textContent.trim()) continue;
+      var r = g.getBoundingClientRect();
+      if (r.width > 0 && r.right > tb.left + 1 && r.left < tb.right - 1 && r.bottom > tb.top + 1 && r.top < tb.bottom - 1) {
+        tagOverlap += 1;
+        break;
+      }
+    }
+  });
   // how far the page is wider than its window (0 when nothing overflows): the browser check requires 0
   var root = document.documentElement;
   report.setAttribute("data-overflow", String(Math.max(0, root.scrollWidth - root.clientWidth)));
   report.setAttribute("data-typeset", String(typeset));
+  report.setAttribute("data-tag-overlap", String(tagOverlap));
   report.setAttribute("data-macros-used", JSON.stringify(macros));
   report.setAttribute("data-source", String(source));
   report.textContent = typeset + (typeset === 1 ? " formula" : " formulas") + " typeset" +
