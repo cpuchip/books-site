@@ -15,7 +15,10 @@ VOID = {"br", "hr", "img"}
 DROP = {"role", "data-label", "data-latex-placement"}
 # the only classes kept: those site.js, browsercheck and site.css read in a chapter's text; any other token is dropped
 # (a book's own class could otherwise take a site rule, e.g. graph-canvas clips, tx typesets $...$)
-KEEP_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back"}
+KEEP_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back",
+                # a worked illustration's layout as an HTML table (Boyden's sums, divisions and roots): the table, and
+                # one rule on one side of a cell, which a KaTeX array cannot draw (agreed with the data owner, #7968)
+                "tex", "rule-t", "rule-b", "rule-l", "rule-r"}
 # every id from the book is written with this prefix, ids and links alike, so none can be one the page uses
 ID_PREFIX = "c-"
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:*-]*\Z")

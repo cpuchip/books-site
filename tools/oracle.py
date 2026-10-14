@@ -96,7 +96,7 @@ TEXT_STYLE = re.compile(r"\s*text-align:\s*(?:left|center|right|justify)\s*;?\s*
 # alignment); every id and fragment with the c- prefix, so no book id can be one the page itself uses
 TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan", "value"}
 TEXT_OUT_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back",
-                    "ta-left", "ta-center", "ta-right", "ta-justify"}
+                    "ta-left", "ta-center", "ta-right", "ta-justify", "tex", "rule-t", "rule-b", "rule-l", "rule-r"}
 TEXT_PAGE = re.compile(r"books/([^/]+)/ch/([^/]+)/text/index\.html\Z")
 WITHHELD = {"errata": "its book's errata do not yet say which chapter each is in",
             "macros": "its book's macros name the transcription's source"}

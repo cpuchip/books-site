@@ -83,3 +83,10 @@ p.withheld { color: var(--muted, inherit); }
    position:absolute, and a formula wider than its scrolling box then runs under the number ("68,4(50)cal.", measured
    2026-10-13 on Planck and on the released Todhunter); main raises the specificity over katex.min.css, loaded after */
 main .katex-display > .katex > .katex-html > .katex-tag { position: static; margin-left: 1.5em; }
+/* a worked illustration set as an HTML table (class tex): no borders but the rules the book draws, one per side */
+article.text table.tex { border-collapse: collapse; width: auto; }
+article.text table.tex td, article.text table.tex th { border: 0; padding: .05rem .35rem; }
+article.text table.tex .rule-t { border-top: 1px solid currentColor; }
+article.text table.tex .rule-b { border-bottom: 1px solid currentColor; }
+article.text table.tex .rule-l { border-left: 1px solid currentColor; }
+article.text table.tex .rule-r { border-right: 1px solid currentColor; }

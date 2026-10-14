@@ -329,6 +329,11 @@ sanitizer, linked from its chapter page ("Read the chapter"). A chapter without 
   in any case. A rejected chapter gets no page; the build prints how many were withheld and why, chapter by
   chapter. It never strips something unknown and ships the rest.
 
+**Worked illustrations as tables** (agreed with the data owner, #7968, for Boyden's sums, divisions and roots, which
+need column spans and partial rules a KaTeX array cannot draw): `<table class="tex">` with `colspan`, a cell's
+`text-align` (written as a ta-* class like any other), its math as math spans, and the classes `rule-t`, `rule-b`,
+`rule-l`, `rule-r`, one border each; both the sanitizer's list and the oracle's own include exactly these.
+
 **Links**, resolved in order: a target on the same page stays a fragment; a target that exists in exactly one
 other chapter of the same book (one that has a page) becomes a link to that page; anything else loses its
 `<a>` and keeps its words. So footnotes read as endnotes and no link is dead.
