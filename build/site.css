@@ -90,3 +90,4 @@ article.text table.tex .rule-t { border-top: 1px solid currentColor; }
 article.text table.tex .rule-b { border-bottom: 1px solid currentColor; }
 article.text table.tex .rule-l { border-left: 1px solid currentColor; }
 article.text table.tex .rule-r { border-right: 1px solid currentColor; }
+article.text table.tex td, article.text table.tex th { white-space: nowrap; }  /* KaTeX breaks a long cell at + and − otherwise */

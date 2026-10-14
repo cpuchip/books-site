@@ -1,6 +1,6 @@
 {
- "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books 2b5fd80. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
- "pin": "2b5fd80c651b461a2f4b18a2a4c18b569a22f011",
+ "_": "Formulas each book may show as source (KaTeX could not typeset them), measured at pd-books a64be42. The browser check fails above this; lower it as the export's book.macros land, never raise it without the reason in the commit.",
+ "pin": "a64be4207ccf2397588e49e749c030228a05403d",
  "books": {
   "ball-mathematical-recreations-1905": 5,
   "blackburn-elements-plane-trigonometry-1863": 5,
@@ -25,13 +25,14 @@
   "whitehead-introduction-to-mathematics-1911 (text)": "3 to 0 on 2026-10-13, measured at 040cb80 when its text pages were released",
   "todhunter-spherical-trigonometry-1886 (text)": "34 at 3372745, 21 at 30d284c, 15 at 94f9c53, 11 at 68e2c0c, measured each time",
   "planck-treatise-on-thermodynamics-1903 (text)": "131 at 3372745, 0 at 2b5fd80 when its text pages were released, measured",
-  "de-morgan-elementary-illustrations-calculus-1899 (text)": "22 at 3372745, 0 at 2b5fd80 when its text pages were released, measured"
+  "de-morgan-elementary-illustrations-calculus-1899 (text)": "22 at 3372745, 0 at 2b5fd80 when its text pages were released, measured",
+  "boyden-first-book-in-algebra-1895 (text)": "17 at 3372745, 0 at a64be42 when its text pages were released, measured"
  },
  "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3372745, the first export where every chapter with text has a page; a released book's re-measured at each pin, 30d284c for Todhunter; a book held in build/text-hold.json keeps its last measure until it is released; a book not listed is held to 0).",
  "text": {
   "ball-mathematical-recreations-1905": 31,
   "blackburn-elements-plane-trigonometry-1863": 14,
-  "boyden-first-book-in-algebra-1895": 17,
+  "boyden-first-book-in-algebra-1895": 0,
   "de-morgan-elementary-illustrations-calculus-1899": 0,
   "dickson-theory-of-equations-1922": 233,
   "hardy-course-of-pure-mathematics-1921": 66,
