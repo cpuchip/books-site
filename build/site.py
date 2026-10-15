@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import neutral  # noqa: E402
 import sapage  # noqa: E402
+import search  # noqa: E402
 import textpage  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -83,11 +84,11 @@ MATH_JS = ["vendor/katex/katex.min.js", "vendor/katex/contrib/auto-render.min.js
 CHEM_JS = "vendor/katex/contrib/mhchem.min.js"  # KaTeX's \ce and \pu (Apache-2.0); only on pages that use them
 
 
-def page(title, body, depth, desc="", math=None, scripts=(), licence=None):
+def page(title, body, depth, desc="", math=None, scripts=(), licence=None, styles=()):
     """math: None for a page without math, else the book's macros (a dict) for KaTeX. licence: the footer's
     sentence for a page that shows a share-alike book (sapage.py), in place of the public-domain data line."""
     up = "../" * depth
-    css = "".join(f'\n<link rel="stylesheet" href="{up}{c}">' for c in (MATH_CSS if math is not None else []))
+    css = "".join(f'\n<link rel="stylesheet" href="{up}{c}">' for c in (MATH_CSS if math is not None else list(styles)))
     mjs = MATH_JS if math is not None else []
     if mjs and ("\\ce{" in body or "\\pu{" in body):
         mjs = mjs[:1] + [CHEM_JS] + mjs[1:]  # after katex.min.js, which it extends
@@ -102,11 +103,12 @@ def page(title, body, depth, desc="", math=None, scripts=(), licence=None):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
+<link rel="icon" href="{up}favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="{up}site.css">{css}
 </head>
 <body>
 <header class="top"><a class="brand" href="{up}index.html">Math and physics books</a>
-<nav><a href="{up}graph/index.html">Concept graph</a> <a href="{up}about/index.html">About</a></nav></header>
+<nav><a href="{up}search/index.html">Search</a> <a href="{up}graph/index.html">Concept graph</a> <a href="{up}about/index.html">About</a></nav></header>
 <main{main_attrs}>
 {body}
 </main>
@@ -326,9 +328,104 @@ their archive. The records below (problems, checks, errata) are from <a href="{e
                 math=b.get("macros") or {})
 
 
-def render_excerpt(x):
-    return (f'<li class="excerpt" data-kind="excerpt" data-id="{e(x["id"])}" id="{e(anchor(x["id"]))}"><p class="loc">{e(x.get("location") or "")}</p>'
-            f'<blockquote>{text(x.get("markdown"), "text")}</blockquote></li>')
+# a formula in export markdown; a dollar escaped as \$ (Boyden's money) is a dollar, never a delimiter
+MATH_SPAN = re.compile(r"(?<!\\)\$\$.*?(?<!\\)\$\$|(?<!\\)\$(?:\\.|[^$\\])*\$", re.S)
+
+
+def emphasis(s):
+    """Export markdown as text (its LaTeX kept for KaTeX), with its *emphasis* and **strong** rendered by CommonMark's
+    rule for star runs: a run that can open (left-flanking) and a later one that can close (right-flanking) pair up,
+    nearest first, two stars where both have two, so nesting (*a (*i.e.*) b*) and a star inside a word (1*b*) work.
+    A formula is set aside first: a star in it is not a marker, and an emphasis that holds one still closes. A star
+    that pairs with nothing stays a star."""
+    held = []
+
+    def hold(m):
+        held.append(m.group(0))
+        return f"\x00{len(held) - 1}\x00"
+    s = MATH_SPAN.sub(hold, s or "")
+    parts = re.split(r"(\*+)", s)
+    space = lambda c: c == "" or c.isspace()
+    punct = lambda c: c != "" and not c.isalnum() and not c.isspace() and c != "\x00"
+    runs = []  # [part index, stars left, can open, can close, open tags, close tags, stars in the run]
+    for i in range(1, len(parts), 2):
+        before = parts[i - 1][-1:] if parts[i - 1] else (parts[i - 2][-1:] if i >= 2 else "")
+        after = parts[i + 1][:1] if i + 1 < len(parts) else ""
+        left = not space(after) and (not punct(after) or space(before) or punct(before))
+        right = not space(before) and (not punct(before) or space(after) or punct(after))
+        runs.append([i, len(parts[i]), left, right, [], [], len(parts[i])])
+    stack = []
+    for r in runs:
+        if r[3]:
+            k = len(stack) - 1
+            while k >= 0 and r[1]:
+                o = stack[k]
+                both = (o[2] and o[3]) or (r[2] and r[3])
+                if o[1] and not (both and (o[6] + r[6]) % 3 == 0 and not (o[6] % 3 == 0 and r[6] % 3 == 0)):
+                    use = 2 if o[1] >= 2 and r[1] >= 2 else 1
+                    tag = "strong" if use == 2 else "em"
+                    o[4].insert(0, f"<{tag}>")
+                    r[5].append(f"</{tag}>")
+                    o[1] -= use
+                    r[1] -= use
+                    del stack[k + 1:]  # runs between the pair can no longer pair across it
+                    if not o[1]:
+                        del stack[k]
+                        k -= 1
+                    continue
+                k -= 1
+        if r[1] and r[2]:
+            stack.append(r)
+    out = []
+    for i, part in enumerate(parts):
+        r = next((x for x in runs if x[0] == i), None) if i % 2 else None
+        if r is None:
+            out.append(html.escape(part))
+        else:
+            out.append("".join(r[5]) + "*" * r[1] + "".join(r[4]))
+    return re.sub("\x00([0-9]+)\x00", lambda m: html.escape(held[int(m.group(1))]), "".join(out))
+
+
+def locate(x, chapter_blocks):
+    """The id of the text block where an excerpt's words begin, "" when they cannot be found there once (the
+    excerpt then links to the text page's top), or None when the chapter has no text page."""
+    if chapter_blocks is None:
+        return None
+    flat, owner = [], []
+    for i, w, _ in chapter_blocks:
+        flat.extend(w)
+        owner.extend([i] * len(w))
+    # the excerpt's words as its page shows them (its emphasis rendered, so 1*b* is the word 1b), formulas left out
+    shown = html.unescape(re.sub(r"<[^>]+>", "", emphasis(x.get("markdown"))))
+    want = textpage.words(MATH_SPAN.sub(" ", shown))
+    s = " " + " ".join(flat) + " "
+    for probe in (want, want[:8]):
+        if len(probe) < 3:
+            continue
+        q = " " + " ".join(probe) + " "
+        at = s.find(q)
+        if at >= 0 and s.find(q, at + 1) < 0:
+            return owner[s[:at + 1].count(" ") - 1]
+    return ""
+
+
+def page_label(v):
+    """The export's page as a reader reads it: a printed page (183, xii) is "p. 183"; "scan 29" (a leaf of the scan,
+    where the book prints no number the data could use) is "scan page 29"; anything else as written."""
+    v = str(v)
+    if re.fullmatch(r"[0-9]+|[ivxlcdm]+", v, re.I):
+        return f"p. {v}"
+    m = re.fullmatch(r"scan ([0-9]+)", v)
+    return f"scan page {m.group(1)}" if m else v
+
+
+def render_excerpt(x, where=None):
+    page_no = f'<span class="pg">{e(page_label(x.get("page")))}</span>' if x.get("page") else ""
+    link = ("" if where is None else
+            f' <a class="intext" href="text/index.html{"#" + e(where) if where else ""}">In the text</a>')
+    return (f'<li class="excerpt" data-kind="excerpt" data-id="{e(x["id"])}" id="{e(anchor(x["id"]))}"><p class="loc">{e(x.get("location") or "")}'
+            f'{" " + page_no if page_no else ""}{link}</p>'
+            f'<blockquote><span class="tx" data-field="text">{emphasis(x.get("markdown"))}</span></blockquote></li>')
 
 
 def render_equation(x):
@@ -429,7 +526,7 @@ def text_pages(d, image_ok):
                 if len(other) == 1 and next(iter(other)) in pages:
                     return f"../../{chapter_slug(b, next(iter(other)))}/text/index.html#{textpage.ID_PREFIX}{t}"
                 return None
-            html_, imgs, why = textpage.sanitize(c["text_html"], b, image_ok, resolve, 5, targets)
+            html_, imgs, why = textpage.sanitize(c["text_html"], b, image_ok, resolve, 5, targets, anchors=True)
             out[c["id"]] = "; ".join(why) if why else None
             if not why:
                 clean[c["id"]] = html_
@@ -440,7 +537,7 @@ def text_pages(d, image_ok):
     return state, clean, images
 
 
-def render_chapter(d, c, text_state=None):
+def render_chapter(d, c, text_state=None, chapter_blocks=None):
     by_id_x = {x["id"]: x for x in d["excerpts"]}
     by_id_q = {x["id"]: x for x in d["equations"]}
     sets = {s["id"]: s for s in d["exercise_sets"]}
@@ -454,7 +551,7 @@ def render_chapter(d, c, text_state=None):
     body = f"""<p class="crumb"><a href="../../index.html">{e(b['title'])}</a></p>
 <h1>{e(c.get('title') or c.get('number') or '')}</h1>
 {text_line(c, text_state or {})}
-<section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i]) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
+<section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i], locate(by_id_x[i], chapter_blocks)) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
 <section><h2>Equations</h2><ul class="equations">{''.join((render_equation(by_id_q[i]) if by_id_q[i].get("chapter") == c["id"] else elsewhere(d, by_id_q[i], "equation")) for i in c['equations'] if i in by_id_q)}</ul></section>
 <section><h2>Problems</h2>{sections or '<p>No exercises in this chapter.</p>'}</section>"""
     return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4, math=b.get("macros") or {})
@@ -528,17 +625,45 @@ def render_graph_page(g, books, entries):
     body = f"""<h1>Concept graph</h1>
 <p>{g['counts']['nodes']:,} nodes and {g['counts']['links']:,} links across the shelf
 (<a href="graph.json">graph.json</a>). The view starts with the concept layer: books, chapters and the concepts,
-theorems, methods, laws, quantities, units, instruments, experiments and people they teach. Drag to turn it,
-scroll to zoom, and tap a node to name it and reach its page.</p>
+theorems, methods, laws, quantities, units, instruments, experiments and people they teach. Drag to turn it and
+scroll to zoom. Point at a node or tap it to see what it links to, or find it by name; the key can hide a type.</p>
 <p><label for="view">View</label> <select id="view"><option value="concepts">The concept layer</option>
 <option value="all">Everything (slow on a phone)</option>{options}</select></p>
 <p class="n"><output id="graph-report">The 3D view needs scripts and WebGL.</output></p>
+<div class="graph-wrap">
 <div id="graph" class="graph-canvas"></div>
-<p id="graph-pick" class="pick" aria-live="polite">Tap or click a node to name it.</p>
+<aside class="graph-panel">
+<p class="graph-find"><label for="graph-find">Find</label> <input id="graph-find" list="graph-names" type="search"
+autocomplete="off" spellcheck="false"><datalist id="graph-names"></datalist></p>
+<p id="graph-said" class="said" aria-live="polite"></p>
+<div id="graph-pick" class="pick">Tap or click a node to name it.</div>
+<h2>Key</h2>
+<ul id="graph-key" class="graph-key"></ul>
+</aside>
+</div>
 <section><h2>The same data, as text</h2><p>Each book's index of terms lists what it teaches and where:</p>
 <ul>{terms}</ul></section>"""
     return page("Concept graph", body, 1, "The concept graph of the shelf in 3D",
                 scripts=["vendor/3d-force-graph/3d-force-graph.min.js", "graph.js"])
+
+
+def render_search_page(books, sa_shelf_rows):
+    shelf = [(d["book"]["title"], d["book"]["id"]) for d in books] + [(book["title"], slug) for slug, book, _ in sa_shelf_rows]
+    options = "".join(f'<option value="{e(slug)}">{e(title)}</option>' for title, slug in sorted(shelf))
+    body = f"""<h1>Search</h1>
+<p>Every word of the shelf: the books' text, excerpts, problems, equations' statements and terms. All the words must
+be on the page; "quoted words" must stand together. The search runs in your browser on this site's own index
+files, so the words you type are not sent: the browser fetches the parts of the index a search needs (named by a
+word's first letter), and the server keeps no log of what it serves.</p>
+<form id="search-form" class="search" action="index.html" method="get" role="search">
+<p><label for="q">Words</label> <input id="q" name="q" type="search" autocomplete="off" spellcheck="false"></p>
+<p><label for="search-book">In</label> <select id="search-book" name="book"><option value="">every book</option>
+{options}</select> <button type="submit">Search</button></p>
+</form>
+<p class="n"><output id="search-report">The search needs scripts.</output></p>
+<ol id="search-results" class="hits"></ol>"""
+    return page("Search", body, 1, "Search every book on the shelf",
+                scripts=["vendor/katex/katex.min.js", "search/search.js"], styles=["vendor/katex/katex.min.css"])
 
 
 def render_about(pin, sa_pin=None):
@@ -620,7 +745,8 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
                 if why is not None:
                     withheld.append((cid, why))
             for c in d["chapters"]:
-                w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c, state))
+                blk = textpage.blocks(clean[c["id"]]) if c["id"] in clean else None
+                w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/index.html", render_chapter(d, c, state, blk))
                 if c["id"] in clean:
                     w(f"books/{bid}/ch/{chapter_slug(bid, c['id'])}/text/index.html", render_text(d, c, clean[c["id"]]))
                     n_text += 1
@@ -630,8 +756,11 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
         g = compact_graph(graph, node_urls(books, all_terms))
         w("graph/graph.json", json.dumps(g, ensure_ascii=False, separators=(",", ":")))
         w("graph/index.html", render_graph_page(g, books, entries))
-        for f in ("site.js", "graph.js"):
+        for f in ("site.js", "graph.js", "favicon.svg"):
             shutil.copy(HERE / f, dist / f)
+        n_pages, n_units, n_words = search.build(dist)  # from the finished pages; the search page is not indexed
+        w("search/index.html", render_search_page(books, sa_shelf_rows))
+        shutil.copy(HERE / "search.js", dist / "search" / "search.js")
         shutil.copytree(HERE / "vendor", dist / "vendor")
         version = {"pd_books": pin, "export_generated_at": generated, "books": len(books)}
         if sa_root:
@@ -643,7 +772,7 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
         shutil.move(str(dist), str(out))
     print(f"built {out}: {len(books)} books, {sum(len(d['chapters']) for d in books)} chapter pages, "
           f"{sum(len(d['problems']) for d in books)} problems, {sum(len(d.get('errata') or []) for d in books)} errata, "
-          f"{n_text} chapter text pages, {len(withheld)} withheld"
+          f"{n_text} chapter text pages, {len(withheld)} withheld; search {n_units} units on {n_pages} pages"
           + (f"; sa-books {sa_pin[:7]}: {len(sa_shelf_rows)} books, {len(sa_files) - len(sa_shelf_rows)} pages, "
              f"{len(sa_figs)} figures" if sa_root else ""))
     for cid, why in withheld:

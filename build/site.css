@@ -96,3 +96,39 @@ article.text table.tex td, article.text table.tex th { white-space: nowrap; }  /
 .pager a { margin-right: 1rem; }
 p.pages a { display: inline-block; min-width: 2.2rem; margin: .1rem 0; }
 section.credit { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
+
+/* finding things (docs/BLUEPRINT.md): the search page, excerpts in place, the block a link lands on */
+.search input[type="search"] { width: 100%; max-width: 30rem; font: inherit; padding: 0.3em 0.4em; box-sizing: border-box; }
+.search select, .search button { font: inherit; max-width: 100%; }
+.hits { padding-left: 1.4em; }
+.hit { margin: 0 0 1.1em; }
+.hit .where { margin: 0; font-family: system-ui, sans-serif; font-size: 95%; }
+.hit .kind { color: var(--muted); font-size: 80%; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.4em; }
+.hit .snip { margin: 0.2em 0 0; overflow-wrap: anywhere; }
+mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; padding: 0 0.1em; }
+#search-more { font: inherit; }
+.excerpt .loc .pg { color: var(--muted); margin-left: 0.5em; }
+.excerpt .loc .intext { margin-left: 0.6em; }
+article.text > :target { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: 0 0 0 0.4em color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* the graph's panel: beside the view on a wide screen, below it on a phone */
+.graph-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 62rem) {
+  .graph-wrap { grid-template-columns: minmax(0, 1fr) 19rem; width: min(94vw, 84rem);
+                margin-left: calc((100% - min(94vw, 84rem)) / 2); }
+  .graph-panel { max-height: 70vh; overflow-y: auto; }
+}
+.graph-panel { font-family: system-ui, sans-serif; font-size: 92%; }
+.graph-panel h2 { font-size: 1.05em; margin: 1em 0 0.4em; }
+.graph-find input { font: inherit; width: 100%; box-sizing: border-box; padding: 0.3em 0.4em; }
+.pick-head { font-weight: 600; margin: 0.6em 0 0.2em; }
+.pick-kind { color: #fff; border-radius: 0.3em; padding: 0 0.4em; font-size: 80%; font-weight: 400; }
+.pick-group { margin: 0.6em 0 0.2em; color: var(--muted); }
+.pick-list { list-style: none; padding: 0; margin: 0; }
+.pick-node { font: inherit; color: var(--accent); background: none; border: 0; border-left: 0.3em solid var(--rule);
+             padding: 0.1em 0.5em; margin: 0.1em 0; text-align: left; cursor: pointer; }
+.pick-node:hover, .pick-node:focus { text-decoration: underline; }
+.graph-key { list-style: none; padding: 0; margin: 0; }
+.graph-key label { cursor: pointer; }
+.swatch { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%; margin: 0 0.4em 0 0.3em; vertical-align: -0.05em; }
+.said { margin: 0.4em 0 0; min-height: 0; color: var(--muted); font-size: 90%; }

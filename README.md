@@ -6,6 +6,10 @@ The site is built from `pd-books/export/` (CC0 data) and hosts no book scans; sc
 It also shows the share-alike books in [cpuchip/sa-books](https://github.com/cpuchip/sa-books), page by page from
 their transcriptions, each page with its credits and under its book's licence (`build/sapage.py`, checked by
 `tools/saoracle.py`; docs/BLUEPRINT.md, "The share-alike books").
+Readers can search every book (`/search/`: an index the build writes from its own pages, `build/search.py`, searched
+in the browser by `build/search.js` and checked by `tools/searchcheck.py`), follow an excerpt to its paragraph in
+the chapter's text, and explore the graph with a panel (find a node, see its links, a colour key); docs/BLUEPRINT.md,
+"Finding things". The site stays static files: no server code, no database.
 
 Code: MIT. Data: see pd-books (CC0 for everything we made; Project Gutenberg's licence for its files, kept intact)
 and sa-books (each book under its own CC BY-SA licence, which the pages that show it keep).
@@ -13,7 +17,7 @@ and sa-books (each book under its own CC BY-SA licence, which the pages that sho
 ## Build
 
     sh build.sh                       # fetch pd-books at pd-books.pin and sa-books at sa-books.pin, build, check, write dist/
-    CHROMIUM=/path/to/chrome sh build.sh   # also the browser check (math typeset, 3D graph counts)
+    CHROMIUM=/path/to/chrome sh build.sh   # also the browser check (math typeset, 3D graph counts, search, graph panel)
     docker build .                    # the deployed image: the build and its checks, then nginx serving dist
     python3 tools/verifylive.py URL DIST   # the live site serves exactly the rehearsed dist
 

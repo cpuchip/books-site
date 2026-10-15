@@ -24,7 +24,7 @@ NOT_SERVED = ["build.sh", "Dockerfile", "pd-books.pin", "tools/oracle.py", "buil
 
 
 def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "books-site verifylive"})
+    req = urllib.request.Request(url, headers={"User-Agent": "books-site verifylive", "Accept-Encoding": "identity"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, r.read()

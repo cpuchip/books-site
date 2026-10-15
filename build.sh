@@ -9,7 +9,7 @@
 #                                        rehearsal before any deploy sets it, and a build without it says so
 #
 # Order: pd-books' own export check (inside site.py) -> build into a staging dir -> the oracle with its
-# planted controls (35 and two refusals, docs/BLUEPRINT.md) -> the share-alike books' oracle (8 controls) -> links -> outward -> graph -> vendored libraries -> the browser (with
+# planted controls (38 and two refusals, docs/BLUEPRINT.md) -> the share-alike books' oracle (8 controls) -> links -> outward -> graph -> the search index (4 controls) -> vendored libraries -> the browser (with
 # CHROMIUM). OUT is replaced only when every check that ran is green.
 set -eu
 cd "$(dirname "$0")"
@@ -51,6 +51,7 @@ python3 tools/saoracle.py "$SA" "$STAGE" --control
 python3 tools/linkcheck.py "$STAGE" --control ${OFFLINE:+--offline}
 python3 tools/outward.py "$SRC/export" "$STAGE" --control
 python3 tools/graphcheck.py "$SRC/export" "$STAGE" --control
+python3 tools/searchcheck.py "$STAGE" --control
 python3 tools/vendorcheck.py "$STAGE" --control ${OFFLINE:+--offline}
 if [ -n "${CHROMIUM:-}" ]; then
   python3 tools/browsercheck.py "$SRC/export" "$STAGE" --chromium "$CHROMIUM" --control --ceiling build/math-ceiling.json

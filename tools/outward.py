@@ -123,13 +123,16 @@ def book_text(export):
 
 class _Text(HTMLParser):
     """Text nodes and attributes; sa[i] says whether texts[i] is inside a share-alike book's page text
-    (<article data-kind="sa-page">), which tools/saoracle.py proves is sa-books' transcription, word for word."""
+    (<article data-kind="sa-page">), which tools/saoracle.py proves is sa-books' transcription, word for word, or
+    inside an element with data-field, whose text tools/oracle.py compares with the export's own field exactly (an
+    excerpt's with its emphasis stars set aside): the book's words, which rendered emphasis splits into pieces no
+    longer whole strings of the export."""
     VOID = {"br", "img", "hr", "meta", "link", "input", "source", "wbr"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.texts, self.attrs, self.sa = [], [], []
-        self.depth, self.sa_depth = 0, None
+        self.depth, self.sa_depth, self.field_depth = 0, None, None
 
     def handle_starttag(self, tag, attrs):
         for k, v in attrs:
@@ -140,18 +143,22 @@ class _Text(HTMLParser):
         self.depth += 1
         if tag == "article" and ("data-kind", "sa-page") in attrs and self.sa_depth is None:
             self.sa_depth = self.depth
+        if any(k == "data-field" for k, _ in attrs) and self.field_depth is None:
+            self.field_depth = self.depth
 
     def handle_endtag(self, tag):
         if tag in self.VOID:
             return
         if self.sa_depth == self.depth:
             self.sa_depth = None
+        if self.field_depth == self.depth:
+            self.field_depth = None
         self.depth -= 1
 
     def handle_data(self, data):
         if data.strip():
             self.texts.append(data)
-            self.sa.append(self.sa_depth is not None)
+            self.sa.append(self.sa_depth is not None or self.field_depth is not None)
 
 
 def check(export, dist):
@@ -205,6 +212,10 @@ def check(export, dist):
             bad.extend((rel, kind, "") for kind in leaks(raw))
             for n in g["nodes"]:
                 judge(rel, n[2], f"graph node {n[0]}", raw_checked=True)
+        elif rel.startswith("search/") and f.suffix == ".json":
+            # the search index: tools/searchcheck.py proves it holds exactly the pages' own words, which this check
+            # has judged on the pages; its words (spin, church, tutor) are the books', so only leaks are looked for
+            bad.extend((rel, kind, "") for kind in leaks(f.read_text(encoding="utf-8")))
         elif f.suffix in TEXT_FILES:
             raw = f.read_text(encoding="utf-8")
             bad.extend((rel, kind, "") for kind in leaks(raw))
@@ -233,7 +244,9 @@ def control(export, dist):
             return n[0]
         el = plant(el, r'<p class="ev">', "settled by qwenniverse-fermion-check, see /home/someone/notes. ")
         el = plant(el, r'<p class="n">', "caught in the tutor run, ")
-        el = plant(el, r'Corrected: <span class="tx"[^>]*>', f"{EM} ")
+        # in our words beside a field, not inside it: a data-field's text is the export's (the oracle compares it
+        # exactly), so an em-dash planted inside one is the oracle's to see
+        el = plant(el, r'Corrected: ', f"{EM} ")
         t = plant(t[:m.start()] + el + t[m.end():], r'<main>',
                   '<a href="https://claude.ai/chat/x">x</a><a href="http://10.0.0.1:8080/">y</a>')
         book.write_text(t, encoding="utf-8")

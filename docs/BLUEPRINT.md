@@ -519,8 +519,93 @@ markup allowlist.
 - The browser check visits every sa page, against a measured ceiling for the book in `math-ceiling.json`.
 - The outward check exempts an sa page's article text (the book's words), as it exempts quoted book fields, and
   checks the credits, provenance lines and our own text.
+- Since 2026-10-15 ("Finding things") it also exempts, by position, the text inside an element with `data-field`:
+  the export's own field, which the oracle compares exactly (an excerpt's with its stars set aside), and which
+  rendered emphasis now splits into pieces that are no longer whole strings of the export (the printed dashes
+  pd-books beb8a93 restored made this visible). Leaks are still looked for there. The search index (`search/*.json`)
+  is checked for leaks only: searchcheck proves it holds exactly the pages' words, which are judged on the pages,
+  and its words include the books' own spin, church and tutor.
 - The link check requests cbphysics.org and the licence page like any external link.
 - `version.json` carries the sa-books pin.
+
+## Finding things: search, excerpts in place, the graph's panel (written 2026-10-15, before their code)
+
+Michael, 2026-10-15, on the live site: the graph page "could be more interactive? like with a side panel? search?
+and updating with what the mouse is over? maybe a color code key?"; "these excerpts page could actually link to the
+page they were found on"; "could we provide a whole search over every book?"; "if we need to add a real backend
+with postgres to improve a lot of that, I am fine with that."
+
+**No backend.** Measured on the d2d75b0 dist: 1,007 pages, about 900,000 words, 12,821 distinct words; a
+paragraph-level index is 1.5 MB of postings (0.5 MB gzipped) and 1.9 MB of snippet text (0.5 MB gzipped), loaded
+only when a reader searches. A database would add a server to run, back up and secure, and would end the
+byte-for-byte comparison of the served site with the rehearsal, for no gain at this size. The site stays static
+files. Revisit if the shelf grows past roughly ten times this.
+
+**Block anchors.** Every top-level block of a chapter's text (a child of the text article: a paragraph, list,
+table, heading, figure, blockquote, div or section) carries an id: the book's own (`c-...`) where it has one,
+else `b-N`, N its position in the article from 1. The ids are written after the allowlist, so the sanitizer's
+rules are unchanged; the oracle's text check accepts `b-[1-9][0-9]*` beside `c-`.
+
+**Excerpts in place.** On a chapter page each excerpt shows its page (`p. 183`, from the export) and, when the
+chapter's text page is published, a link "In the text": to `text/index.html#<id>` of the block where the excerpt's
+words begin, or to the text page's top when its words cannot be found there exactly once (all of them, else its
+first 8). Measured at 51b8c3c (where the data owner wrote out the excerpts' cross-references as the chapter
+text has them): 796 to their block, 15 to the top, most of them formulas; 1,630 excerpts are in chapters whose
+text is not published, and show their page only. A page reads "p. 183"; the export's
+"scan 29" (a leaf of the scan) reads "scan page 29". Words are compared as `[a-z0-9]+` runs, math left out. A
+located excerpt's target block is highlighted when reached (`:target`). The excerpt's star runs render as
+emphasis by CommonMark's rule (nesting and a star inside a word work; a formula is set aside first; a dollar
+escaped as `\$` is a dollar); nothing else of its text changes. The oracle does not re-run that rule: it compares
+the excerpt's words with every star outside a formula set aside, and counts the excerpts that still show a star
+against a ceiling. On the page, site.js shows an escaped `\$` as `$` once the math is typeset (it had shown the
+backslash).
+
+**Search** (`/search/`). The build reads its own finished pages (so the index holds what a reader sees) and writes:
+`search/docs.json` (every searchable unit: its url with fragment, a title, its book, its kind), `search/p/<c>.json`
+(postings, sharded by a word's first character, each word's doc numbers delta-coded) and `search/t/<n>.json`
+(each unit's display text, for snippets, in chunks of 1,000 units). Units: each anchored block of a text page;
+each element with `data-kind` and an id elsewhere (an excerpt, equation, problem, term, erratum); each sa page;
+and each page's remaining text as one unit. Math is not indexed. A query is lowercased `[a-z0-9]+` words, all
+required, the last also as a prefix when the query ends inside it; "quoted words" must be consecutive; a book filter
+narrows it. Every result holds every word, so the order is: the words as typed before longer words they begin,
+then (when 600 or fewer units hold them) units where the words stand together, then near each other (within 8
+words), then a unit before the rest of its page, then the site's page order. A snippet centres on the words standing
+together where they do, never cuts a formula, and typesets its formulas with KaTeX. Nothing about a query leaves the reader's
+browser: the shards are fetched whole, and the server keeps no access log.
+
+**The graph's panel.** Beside the 3D view (below it on a phone): a search over the names in the current view
+(choosing one turns the camera to it and selects it); what the pointer is over, or what was tapped, named with its
+kind, its number of links in the view, its page, and its neighbours grouped by link type (each one selects that
+node); and a colour key, one fixed colour per node type with its count in the view, each a switch that hides or
+shows that type. The colours are written in graph.js, not chosen by the library at random, so the key is stable.
+`?find=<name>` opens a view with that node chosen, and choosing a node writes it into the address, so a node can be
+linked to.
+The view's report and digest stay what the browser check compares.
+
+**Gzip and the icon.** nginx compresses HTML, CSS, JavaScript, JSON and SVG for a client that asks; the live
+check asks for identity (now said in its request, not left to the library's default), so the bytes it compares
+are unchanged. Every page links a small SVG icon (`favicon.svg`), so a browser that reads the link no longer asks
+for `/favicon.ico` (basecamp's DevTools pass, 2026-10-15: its 404 was the only console error).
+
+**Oracle.**
+- `tools/searchcheck.py` (independent of the build's parser: a tree of each page with each unit's subtree less the
+  units inside it, where the build streams with a stack; formulas found by its own scan, where the build uses a
+  regular expression): from the dist pages alone, every unit in docs.json resolves (page exists, fragment exists
+  once); the postings equal the words it derives for each unit, exactly; every word of every text page's article
+  is in the index for a unit of that page; each unit's text (whole: snippets and phrase checks read it) holds all
+  its words in order. A fresh-eyes review on 2026-10-15 found the two had shared one regular expression, and with it
+  one mistake (an escaped `\$` read as a formula's opening, which hid 113 units' words); the scan is the fix. Controls on every run, each must go red alone: a posting dropped, a stray posting added,
+  a unit pointing at a missing fragment, a word missing from a text page's units.
+- The oracle's excerpt check: where an excerpt's words stand exactly once in its chapter's text page, its link
+  names the block they begin in; elsewhere it goes to the page's top; the excerpts linked to the top and those
+  still showing a star are counted against ceilings measured at the first build (build/excerpt-ceiling.json).
+  Controls: a link moved to the next block, a fragment removed from the page, an excerpt's emphasis written back
+  as stars.
+- The browser check: the search page, asked for four words that stand together in one unit of a text page and
+  nowhere else (found by searchcheck's own reading of the pages), returns that unit first and only; the graph page,
+  opened with `?find=` on the concept layer's best-linked concept whose name is its own, names that node and counts
+  as many links as the export gives it in that view. Controls: a search script that drops its first result, a
+  panel that counts one link short.
 
 ## Deploy
 

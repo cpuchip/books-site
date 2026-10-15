@@ -211,6 +211,26 @@ def norm(s):
     return " ".join(str(s).split())
 
 
+# a formula in an excerpt's markdown, as the oracle reads it: \$ is an escaped dollar, never a delimiter
+ORACLE_MATH = re.compile(r"(?<!\\)\$\$[\s\S]*?(?<!\\)\$\$|(?<!\\)\$(?:\\.|[^$\\])*\$")
+
+
+def plain_markers(s):
+    """An excerpt's words with every star outside a formula set aside, on the export's side and the page's alike:
+    the build renders the star runs as emphasis (CommonMark's rule, site.py), and the oracle does not re-run that
+    rule; it requires the words to survive, and excerpt_links_check counts the excerpts that still show a star
+    against a ceiling, so a renderer that stopped pairing them would go red there (docs/BLUEPRINT.md)."""
+    if not isinstance(s, str):
+        return s
+    out, last = [], 0
+    for m in ORACLE_MATH.finditer(s):
+        out.append(s[last:m.start()].replace("*", ""))
+        out.append(m.group())
+        last = m.end()
+    out.append(s[last:].replace("*", ""))
+    return "".join(out)
+
+
 def export_units(export):
     """{(kind, id): {"page": rel path, "text": [fragments]}}, plus a count per (kind, id) for duplicates."""
     export = Path(export)
@@ -260,7 +280,8 @@ def export_units(export):
             set_chapter[s["id"]] = s.get("chapter")
             add("exercise_set", s["id"], ch_page(s.get("chapter")))
         for x in d.get("excerpts", []):
-            add("excerpt", x["id"], ch_page(x.get("chapter")), x.get("markdown"), fields={"text": [x.get("markdown")]})
+            add("excerpt", x["id"], ch_page(x.get("chapter")), plain_markers(x.get("markdown")),
+                fields={"text": [plain_markers(x.get("markdown"))]})
         for x in d.get("equations", []):
             add("equation", x["id"], ch_page(x.get("chapter")), x.get("latex"),
                 fields={"latex": [x.get("latex")], "statement": [x.get("statement")]})
@@ -479,8 +500,8 @@ class _TextOut(HTMLParser):
                 self.bad.append(f"value {v[:20]!r} on <{tag}> in a chapter's text")
             elif k == "class" and not set(v.split()) <= TEXT_OUT_CLASSES:
                 self.bad.append(f"class {v[:40]!r} in a chapter's text")
-            elif k == "id" and not v.startswith("c-"):
-                self.bad.append(f"id {v[:40]!r} in a chapter's text, not c-")
+            elif k == "id" and not (v.startswith("c-") or re.fullmatch(r"b-[1-9][0-9]*", v)):
+                self.bad.append(f"id {v[:40]!r} in a chapter's text, not c- or b-N")
             elif k == "href" and not (re.fullmatch(r"#c-[^\s\\\"<>]+", v)
                                       or re.fullmatch(r"\.\./\.\./[a-z0-9-]+/text/index\.html#c-[^\s\\\"<>]+", v)):
                 self.bad.append(f"a link that leaves the book's text pages: {v[:40]!r}")
@@ -522,6 +543,129 @@ def text_pages_check(dist, export):
     return bad
 
 
+# the elements whose edges part two words: a reader sees 1<em>b</em> as the one word 1b, a<br>b as two
+PARTS_WORDS = {"p", "div", "li", "ul", "ol", "td", "th", "tr", "table", "tbody", "thead", "br", "blockquote",
+               "figure", "figcaption", "caption", "section", "h1", "h2", "h3", "h4", "h5", "hr", "img"}
+
+
+class _Blocks(HTMLParser):
+    """A text page's article as its top-level elements: [(id, [words])], formulas left out. Its own reading, apart
+    from the build's textpage.blocks."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth, self.math, self.out = 0, 0, []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "article" and a.get("data-kind") == "text":
+            self.depth = 1
+            return
+        if not self.depth:
+            return
+        if self.depth == 1 and tag not in VOID:
+            self.out.append([a.get("id"), []])
+        if self.out and tag in PARTS_WORDS:
+            self.out[-1][1].append(" ")
+        if tag not in VOID:
+            self.depth += 1
+            if self.math or (tag == "span" and "math" in (a.get("class") or "").split()):
+                self.math += 1
+
+    def handle_endtag(self, tag):
+        if self.depth > 1 and tag not in VOID:
+            self.depth -= 1
+            if self.math:
+                self.math -= 1
+            if self.out and tag in PARTS_WORDS:
+                self.out[-1][1].append(" ")
+        elif self.depth == 1 and tag == "article":
+            self.depth = 0
+
+    def handle_data(self, data):
+        if self.depth > 1 and self.out and not self.math:
+            self.out[-1][1].append(data)
+
+
+def oracle_words(s):
+    return re.findall(r"[a-z0-9]+", s.lower())
+
+
+EXCERPT_CEILING = Path(__file__).resolve().parent.parent / "build" / "excerpt-ceiling.json"
+
+
+def excerpt_links_check(dist, export):
+    """{page: [findings]}: on each chapter page, an excerpt links into its chapter's text exactly when that text page
+    exists; where the excerpt's words stand exactly once in that text (all of them, else its first 8), the link names
+    the top-level block they begin in, and elsewhere it goes to the page's top; the excerpts linked to the top, and
+    those that still show a star, number no more than build/excerpt-ceiling.json allows."""
+    bad, unplaced, starred = defaultdict(list), [], []
+    md = {}
+    for f in sorted((Path(export) / "books").glob("*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8"))["excerpts"]:
+            md[x["id"]] = x.get("markdown") or ""
+    for page in sorted(Path(dist).glob("books/*/ch/*/index.html")):
+        rel = page.relative_to(dist).as_posix()
+        raw = page.read_text(encoding="utf-8")
+        tpage = page.parent / "text" / "index.html"
+        blocks = None
+        if tpage.is_file():
+            b = _Blocks()
+            b.feed(tpage.read_text(encoding="utf-8"))
+            blocks = [(i, oracle_words("".join(w))) for i, w in b.out]
+        # an excerpt's link is in its first line (its location and page), read alone so that a broken nesting,
+        # which the unit check reports, is not read here as a second link
+        for m in re.finditer(r'<li class="excerpt" data-kind="excerpt" data-id="([^"]+)"[^>]*><p class="loc">(.*?)</p>',
+                             raw, re.S):
+            xid = html.unescape(m.group(1))
+            links = re.findall(r'<a class="intext" href="([^"]*)"', m.group(2))
+            quote = re.search(r"<blockquote>(.*?)</blockquote>", raw[m.end():], re.S)
+            if quote and "*" in ORACLE_MATH.sub(" ", html.unescape(re.sub(r"<[^>]+>", "", quote.group(1)))):
+                starred.append(xid)
+            if blocks is None:
+                if links:
+                    bad[rel].append(f"excerpt {xid} links to a text page that does not exist")
+                continue
+            if len(links) != 1 or not links[0].startswith("text/index.html"):
+                bad[rel].append(f"excerpt {xid}: {len(links)} links into its chapter's text, expected 1")
+                continue
+            frag = html.unescape(links[0])[len("text/index.html"):]
+            # where the excerpt's words stand once in the text (all of them, else its first 8): the block that link
+            # must name; where they stand nowhere, or more than once, the link goes to the page's top
+            probe_all = oracle_words(ORACLE_MATH.sub(" ", plain_markers(md.get(xid, ""))))
+            flat, owner = [], []
+            for n, (_, w) in enumerate(blocks):
+                flat.extend(w)
+                owner.extend([n] * len(w))
+            home = None
+            for probe in (probe_all, probe_all[:8]):
+                if len(probe) < 3:
+                    continue
+                at = [s for s in range(len(flat) - len(probe) + 1) if flat[s:s + len(probe)] == probe]
+                if len(at) == 1:
+                    home = blocks[owner[at[0]]][0]
+                    break
+            if not frag:
+                if home is not None:
+                    bad[rel].append(f"excerpt {xid} links to its text page's top; its words stand once, in #{home}")
+                unplaced.append(xid)
+                continue
+            frag = frag[1:]
+            if sum(1 for i, _ in blocks if i == frag) != 1:
+                bad[rel].append(f"excerpt {xid} links to #{frag}, which is not one top-level block of the text")
+            elif frag != home:
+                bad[rel].append(f"excerpt {xid} links to #{frag}; its words stand once in "
+                                f"{'#' + home if home else 'no block'}")
+    ceiling = json.loads(EXCERPT_CEILING.read_text(encoding="utf-8"))
+    if len(unplaced) > ceiling["unplaced"]:
+        bad["build/excerpt-ceiling.json"].append(f"{len(unplaced)} excerpts link to their text page's top, "
+                                                 f"the ceiling is {ceiling['unplaced']}")
+    if len(starred) > ceiling["stars"]:
+        bad["build/excerpt-ceiling.json"].append(f"{len(starred)} excerpts show a star outside a formula, the ceiling "
+                                                 f"is {ceiling['stars']} (e.g. {starred[0]})")
+    return bad
+
+
 def site_units(dist, export=None):
     """({(kind, id): [hit, ...]}, {(page, key): [stated text, ...]}, {page: [markup findings]}); a hit is a dict.
     With the export, the text pages' own checks too (text_pages_check)."""
@@ -529,6 +673,8 @@ def site_units(dist, export=None):
     dist = Path(dist)
     if export is not None:
         for rel, found in text_pages_check(dist, export).items():
+            pages[rel].extend(found)
+        for rel, found in excerpt_links_check(dist, export).items():
             pages[rel].extend(found)
     for css in sorted(dist.rglob("*.css")):
         if css.relative_to(dist).parts[0] == "vendor":
@@ -562,6 +708,8 @@ def site_units(dist, export=None):
             if jumps != want:
                 pages[rel].append(f"jump links {jumps[:3]} do not match the groups {want[:3]}")
         for u in p.found:
+            if u["kind"] == "excerpt":
+                u["text"] = [plain_markers("".join(u["text"]))]
             anchors = defaultdict(int)
             for href, text in u["anchors"]:
                 anchors[(resolve(rel, href) if href else "(no href)", norm("".join(text)))] += 1
@@ -575,7 +723,8 @@ def site_units(dist, export=None):
             if owner is None:
                 pages[rel].append(f"a data-field {name!r} outside every unit")
             else:
-                owner["hit"]["fields"][name].append(norm("".join(text)))
+                said = "".join(text)
+                owner["hit"]["fields"][name].append(norm(plain_markers(said) if owner["kind"] == "excerpt" else said))
         for key, text, owner, group in p.counts:
             if owner is not None:
                 owner["hit"]["counts"][key].append(norm("".join(text)))
@@ -886,16 +1035,21 @@ def plant_after_article(copy, page_rel, html_text):
 
 
 def plant_drop_paragraph(copy, page_rel):
-    """Remove the article's first paragraph that holds text."""
+    """Remove the article's first paragraph that holds text (a top-level one carries its block id, b-N). The search
+    stays inside the article: once top-level paragraphs gained ids, a search for a bare <p> ran on to the footer's,
+    and this control passed with nothing planted in the text (2026-10-15)."""
     page = copy / page_rel
     text = page.read_text(encoding="utf-8")
     i = text.index('<article class="text"')
-    while True:
-        a = text.index("<p>", i)
+    end = text.index("</article>", i)
+    for m in re.finditer(r'<p(?: id="b-[0-9]+")?>', text[i:end]):
+        a = i + m.start()
         b = text.index("</p>", a) + len("</p>")
         if re.sub(r"<[^>]+>", "", text[a:b]).strip():
             break
-        i = b
+    else:
+        raise AssertionError(f"no paragraph with text in {page_rel}'s article")
+    assert b <= end, page_rel
     page.write_text(text[:a] + text[b:], encoding="utf-8")
 
 
@@ -907,14 +1061,16 @@ def plant_flip_image(copy, rel):
 
 
 def plant_withhold(copy, chapter_page, text_page, cid):
-    """Say a chapter's text is withheld (as the build words it) and take its page away."""
+    """Say a chapter's text is withheld (as the build words it) and take its page away, with its excerpts' links into
+    it (as the build would: the withholding alone is what this control plants)."""
     page = copy / chapter_page
     text = page.read_text(encoding="utf-8")
     old = '<p class="read"><a href="text/index.html">Read the chapter\'s text</a></p>'
     assert text.count(old) == 1, chapter_page
     new = (f'<p class="withheld" data-kind="text" data-id="{html.escape(cid)}" data-withheld="no cause">'
            "The chapter's text is not shown yet: no cause.</p>")
-    page.write_text(text.replace(old, new), encoding="utf-8")
+    text = re.sub(r' <a class="intext" href="text/index\.html[^"]*">In the text</a>', "", text.replace(old, new))
+    page.write_text(text, encoding="utf-8")
     (copy / text_page).unlink()
 
 
@@ -940,6 +1096,17 @@ def script_in_text(chapter):
         c["text_html"] = "<script>x</script>" + c["text_html"]
         book.write_text(json.dumps(d, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return mutate
+
+
+def plant_emphasis_stars(copy, page_rel, i):
+    """An excerpt's first <em>x</em> written back as *x*: the page then shows the marker as text."""
+    p = copy / page_rel
+    s = p.read_text(encoding="utf-8")
+    a, b = element_span(s, "excerpt", i)
+    unit = s[a:b]
+    m = re.search(r"<em>(.*?)</em>", unit, re.S)
+    assert m, f"no emphasis in {i}"
+    p.write_text(s[:a] + unit[:m.start()] + "*" + m.group(1) + "*" + unit[m.end():] + s[b:], encoding="utf-8")
 
 
 def plant_text(copy, page_rel, old, new):
@@ -1148,6 +1315,12 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         tx = rng.choice(texts)
         tx_page = units[("text", tx)]["page"]
         tx_ch = tx_page.replace("/text/index.html", "/index.html")
+        # a paragraph is dropped from a chapter whose excerpts do not link into its text, so the text check alone
+        # answers for it (an excerpt whose home paragraph went would be seen as well, rightly, by excerpt_links_check)
+        quiet = [i for i in texts if 'class="intext"' not in (Path(dist) / units[("text", i)]["page"].replace(
+            "/text/index.html", "/index.html")).read_text(encoding="utf-8")]
+        dx = rng.choice(quiet or texts)
+        dx_page = units[("text", dx)]["page"]
         macros_want = lambda rel, cat: {("count", f"{rel} macros", cat)} if (rel, "macros") in stated else set()
         with_img = [i for i in texts if "<img" in (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8")]
         img_page = units[("text", rng.choice(with_img))]["page"] if with_img else None
@@ -1159,7 +1332,7 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         tw_page = units[("text", tw)]["page"]
         tw_ch = tw_page.replace("/text/index.html", "/index.html")
         site_plants += [
-            ("drop a paragraph from a chapter's text", lambda c: plant_drop_paragraph(c, tx_page), {("text", tx, "content")}),
+            ("drop a paragraph from a chapter's text", lambda c: plant_drop_paragraph(c, dx_page), {("text", dx, "content")}),
             ("put an event handler in a chapter's text", lambda c: plant_after_article(c, tx_page, '<b onclick="x"></b>'),
              {("page", tx_page, "markup")}),
             ("link a chapter's text off the site", lambda c: plant_after_article(c, tx_page, '<a href="https://example.org/"></a>'),
@@ -1195,15 +1368,49 @@ def run_controls(export, dist, units, counts, stated, build, seed):
             hx_ch = units[("text", hx)]["page"]
             hx_page = hx_ch.replace("/index.html", "/text/index.html")
             hx_macros = "data-macros" in (Path(dist) / from_page).read_text(encoding="utf-8")
+            # its excerpts then have a text page and no link into it, which the excerpt check sees too
+            hx_excerpts = 'class="excerpt" data-kind="excerpt"' in (Path(dist) / hx_ch).read_text(encoding="utf-8")
             site_plants.append(("give a page to a chapter that must be withheld",
                                 lambda c: plant_unwithhold(c, hx_ch, from_page, hx),
-                                {("text", hx, "withheld")} | ({("count", f"{hx_page} macros", "extra")} if hx_macros else set())))
+                                {("text", hx, "withheld")} | ({("count", f"{hx_page} macros", "extra")} if hx_macros else set())
+                                | ({("page", hx_ch, "markup")} if hx_excerpts else set())))
         else:
             print("control 'give a page to a chapter that must be withheld': NOT RUN, no chapter is withheld")
     else:
         print("controls on chapter text pages: NOT RUN, no chapter has a text page")
     if not space_page:
         print("control 'change only the whitespace in a page's macros': NOT RUN, no book in this export has macros")
+    # an excerpt linked to its block (and a next block to move the link to), and an excerpt with emphasis
+    placed = []
+    for page in sorted(Path(dist).glob("books/*/ch/*/index.html")):
+        raw = page.read_text(encoding="utf-8")
+        tx_raw = (page.parent / "text" / "index.html")
+        for m in re.finditer(r'class="intext" href="text/index\.html#(b-([0-9]+))"', raw):
+            if tx_raw.is_file() and f'id="b-{int(m.group(2)) + 1}"' in tx_raw.read_text(encoding="utf-8"):
+                placed.append((page.relative_to(dist).as_posix(), m.group(1), f"b-{int(m.group(2)) + 1}"))
+    emph, cached = [], {}
+    for k, i in sorted(units):
+        if k == "excerpt":
+            pg = units[(k, i)]["page"]
+            s = cached.setdefault(pg, (Path(dist) / pg).read_text(encoding="utf-8"))
+            span = element_span(s, "excerpt", i)
+            if span and "<em>" in s[span[0]:span[1]]:
+                emph.append((pg, i))
+    if placed and emph:
+        xp, xfrom, xto = rng.choice(placed)
+        xt = xp.replace("/index.html", "/text/index.html")
+        ep, ei = rng.choice(sorted(emph))
+        site_plants += [
+            ("move an excerpt's link to the next block", lambda c: plant_text(c, xp, f'#{xfrom}"', f'#{xto}"'),
+             {("page", xp, "markup")}),
+            ("take an excerpt's target id off its text page",
+             lambda c: plant_text(c, xt, f' id="{xfrom}"', ""), {("page", xp, "markup")}),
+            # the words survive (stars are set aside in the comparison); the star ceiling is what sees it
+            ("show an excerpt's emphasis as stars", lambda c: plant_emphasis_stars(c, ep, ei),
+             {("page", "build/excerpt-ceiling.json", "markup")}),
+        ]
+    else:
+        print("controls on excerpt links: NOT RUN, no excerpt links to a block, or none has emphasis")
     for name, plant, want in site_plants:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "dist"

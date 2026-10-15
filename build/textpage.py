@@ -92,12 +92,14 @@ def links_of(text_html):
             for k, v in attrs if k == "href" and v and v.startswith("#")]
 
 
-def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset()):
+def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset(), anchors=False):
     """(clean HTML, images used, reasons). Reasons non-empty means: no page.
 
     image_ok(path) says whether the export holds images/<book>/... at that path; resolve(target) is "self", an
     href to another page, or None (unlink); depth is how many ../ reach the site root from the page; targets are the
-    ids other chapters of the book link to, kept here so those links land."""
+    ids other chapters of the book link to, kept here so those links land. anchors: give every top-level element
+    that has no id of its own the id b-N (N its place among the top-level elements, from 1), so an excerpt or a search
+    result can link to its paragraph (docs/BLUEPRINT.md, "Finding things")."""
     p = _Parse()
     p.feed(text_html)
     p.close()
@@ -120,6 +122,7 @@ def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset()):
         if n > 1:
             why.append(f"id {v!r} declared {n} times and linked")
     out, images, open_a = [], [], []
+    level, place = 0, 0  # open elements written so far; top-level elements seen
     up = "../" * depth
     for kind, tag, attrs in p.events:
         if kind == "data":
@@ -129,8 +132,10 @@ def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset()):
             if tag == "a":
                 if open_a.pop():
                     out.append("</a>")
+                    level -= 1
                 continue
             out.append(f"</{tag}>")
+            level -= 1
             continue
         kept, keep_a, classes = [], True, []
         for k, v in attrs:
@@ -185,6 +190,56 @@ def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset()):
                 if ids:
                     out.append(f'<span id="{html.escape(ids[0][1], quote=True)}"></span>')
                 continue
+        if level == 0 and tag not in VOID:
+            place += 1
+            if anchors and not any(k == "id" for k, v in kept):
+                kept.append(("id", f"b-{place}"))
         a = "".join(f' {k}="{html.escape(v, quote=True)}"' for k, v in kept)
         out.append(f"<{tag}{a}>")
+        if tag not in VOID:
+            level += 1
     return "".join(out), images, why
+
+
+# elements whose edges part words (a cell, an item, a line break); inline ones (em, span, a) do not
+SEPARATE = {"blockquote", "br", "caption", "div", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "hr", "img",
+            "li", "ol", "p", "section", "table", "tbody", "td", "th", "thead", "tr", "ul"}
+BLOCK_ID = re.compile(r"b-[1-9][0-9]*\Z")
+WORD = re.compile(r"[a-z0-9]+")
+
+
+def words(s):
+    """The words an excerpt, a block or a query is compared by: lowercased runs of a-z and 0-9."""
+    return WORD.findall(s.lower())
+
+
+def blocks(clean):
+    """[(id, words, text)] for each top-level element of sanitized HTML that has an id, in order. words leave math
+    out; text is what a reader sees, with each formula as its LaTeX source between its delimiters."""
+    p = _Parse()
+    p.feed(clean)
+    p.close()
+    out, level, cur, in_math = [], 0, None, 0
+    for kind, tag, attrs in p.events:
+        if kind != "data" and cur is not None and tag in SEPARATE:
+            cur[1].append(" ")
+            cur[2].append(" ")
+        if kind == "start":
+            a = dict(attrs)
+            if level == 0:
+                cur = [a.get("id"), [], []] if tag not in VOID else None
+                if cur is not None:
+                    out.append(cur)
+            if in_math or (tag == "span" and "math" in (a.get("class") or "").split()):
+                in_math += 1 if tag not in VOID else 0
+            if tag not in VOID:
+                level += 1
+        elif kind == "end":
+            level -= 1
+            if in_math:
+                in_math -= 1
+        elif cur is not None and level > 0:
+            cur[2].append(tag)
+            if not in_math:
+                cur[1].append(tag)
+    return [(i, words("".join(w)), " ".join("".join(x).split())) for i, w, x in out if i]

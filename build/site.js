@@ -38,6 +38,17 @@
       errorCallback: function () { source += 1; }
     });
   });
+  // a dollar the markdown escapes (\$500, Boyden's money) is shown as the book prints it, once the math is typeset;
+  // the HTML keeps the export's text
+  Array.prototype.forEach.call(document.querySelectorAll("main .tx"), function (el) {
+    el.normalize();  // auto-render leaves a text node split where it tried a $ that never closed
+    var walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null), n;
+    while ((n = walk.nextNode())) {
+      if (n.nodeValue.indexOf("\\$") >= 0 && !(n.parentNode.closest && n.parentNode.closest(".katex"))) {
+        n.nodeValue = n.nodeValue.replace(/\\\$/g, "$");
+      }
+    }
+  });
   // a chapter's own text (pandoc's spans): \(...\) inline, \[...\] display; typeset into a new element, so a
   // formula KaTeX cannot typeset keeps its source on the page
   Array.prototype.forEach.call(document.querySelectorAll("main article.text span.math.inline, main article.text span.math.display"), function (el) {

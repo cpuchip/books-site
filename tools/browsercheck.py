@@ -13,8 +13,13 @@ what each page wrote into its report element after its scripts ran.
   Graph: #graph-report states the counts drawn: the default view the concept layer, ?view=all the whole graph, and
         ?book=<id> each book (the book, the chapters its book file lists, and every node taught_in them), each as
         this checker computes it from the export's graph.json and book files.
+  Finding (docs/BLUEPRINT.md, "Finding things"): the search page, asked for four words that stand together in one
+        unit of a text page and nowhere else, finds that one unit first and only; the graph page, opened with
+        ?find=<name> on the concept layer's best-linked concept whose name is its own, names that node and counts
+        as many links as the export gives it in that view.
 --control plants a formula KaTeX cannot read (its page must show one more as source), a chapter page without its
-script (no report), and a graph script that drops a node (the default view one short), each in a copy.
+script (no report), and a graph script that drops a node (the default view one short), each in a copy; and a search
+script that drops its first result, and a graph script whose panel loses a link.
 """
 import argparse
 import functools
@@ -36,7 +41,7 @@ from pathlib import Path
 
 CONCEPT_LAYER = ("book", "person", "chapter", "concept", "method", "theorem", "law", "quantity", "unit",
                  "instrument", "experiment")  # copied from the blueprint, not imported from the build
-REPORT = re.compile(r'<output id="(math|graph)-report"([^>]*)>')
+REPORT = re.compile(r'<output id="(math|graph|search)-report"([^>]*)>|<div id="graph-(pick)"([^>]*)>')
 ANNOTATION = re.compile(r'<annotation encoding="application/x-tex">(.*?)</annotation>', re.S)
 WINDOW = "500,900"
 EQUATION = re.compile(r'<div class="math">.*?<annotation encoding="application/x-tex">(.*?)</annotation>'
@@ -79,7 +84,8 @@ def dump(chromium, url, budget, profile, timeout=240):
 
 def reports(dom):
     # the DOM dump escapes attribute values (a quote is &quot;), so a report is read back unescaped
-    out = {k: {n: html.unescape(v) for n, v in ATTR.findall(attrs)} for k, attrs in REPORT.findall(dom)}
+    out = {k or k2: {n: html.unescape(v) for n, v in ATTR.findall(attrs or attrs2)}
+           for k, attrs, k2, attrs2 in REPORT.findall(dom)}
     if "math" in out:
         main = dom[dom.find("<main"):dom.rfind("</main>")]
         out["math"]["annotations"] = [html.unescape(a) for a in ANNOTATION.findall(main)]
@@ -315,6 +321,70 @@ def load_ceiling(path):
     return out
 
 
+def finding_cases(export, dist):
+    """(query, the unit it must find) and (view, ?find value, node id, links it must count), from the built pages
+    and the export: the search check's own reading of the units (searchcheck.derive), not the build's index."""
+    from searchcheck import derive
+    units = [(rel, frag, seq) for rel, (found, _) in sorted(derive(dist).items())
+             for kind, frag, _, seq in found]
+    grams = defaultdict(int)
+    for _, _, seq in units:
+        for i in range(len(seq) - 3):
+            grams[tuple(seq[i:i + 4])] += 1
+    def unique_gram(want, start):
+        for rel, frag, seq in units:
+            if not want(rel, frag, seq):
+                continue
+            for i in range(start(seq), len(seq) - 3):
+                g = tuple(seq[i:i + 4])
+                if grams[g] == 1 and all(len(w) > 2 for w in g):
+                    return ('"' + " ".join(g) + '"', rel + (f"#{frag}" if frag else ""))
+        return None
+    # a phrase from the middle of a text page's paragraph, and one from the far end of a long unit (past what a
+    # snippet shows, so the phrase check must read the whole unit)
+    searches = [unique_gram(lambda rel, frag, seq: rel.endswith("/text/index.html") and frag and len(seq) >= 12,
+                            lambda seq: len(seq) // 2),
+                unique_gram(lambda rel, frag, seq: len(seq) >= 600, lambda seq: len(seq) - len(seq) // 10)]
+    g = json.loads((Path(export) / "graph.json").read_text(encoding="utf-8"))
+    keep = view_nodes(export, g, "concepts")
+    kind = {n["id"]: n["type"] for n in g["nodes"]}
+    name = {n["id"]: n.get("name") or "" for n in g["nodes"]}
+    links = defaultdict(int)
+    for l in g["links"]:
+        if l["source"] in keep and l["target"] in keep:
+            links[l["source"]] += 1
+            if l["target"] != l["source"]:
+                links[l["target"]] += 1
+    same = defaultdict(int)
+    for n in keep:
+        same[name[n].lower()] += 1
+    node = max((i for i in keep if kind[i] == "concept" and same[name[i].lower()] == 1),
+               key=lambda i: (links[i], i))
+    return [s for s in searches if s], ("concepts", f"{name[node]} ({kind[node].replace('_', ' ')})", node, links[node])
+
+
+def finding_run(chromium, dist, searches, pick, tmp, search_page="search/index.html", graph_page="graph/index.html"):
+    from urllib.parse import quote
+    with Server(dist) as base:
+        s = [reports(dump(chromium, base + f"{search_page}?q={quote(q)}", 5000, Path(tmp) / f"find-s{n}")).get("search") or {}
+             for n, (q, _) in enumerate(searches)]
+        g = reports(dump(chromium, base + f"{graph_page}?find={quote(pick[1])}", 300, Path(tmp) / "find-g")).get("pick") or {}
+    return s, g
+
+
+def finding_judge(searches, pick, s, g):
+    bad = []
+    if len(searches) != 2:
+        bad.append(("search", "cases", f"{len(searches)} phrases found to search for, expected 2"))
+    for (q, place), got in zip(searches, s):
+        if got.get("first") != place or got.get("results") != "1":
+            bad.append(("search", q, f"found {got.get('results')} places, first {got.get('first')}; the one place is {place}"))
+    if g.get("node") != pick[2] or g.get("links") != str(pick[3]):
+        bad.append(("graph-pick", pick[1], f"the panel names {g.get('node')} with {g.get('links')} links; "
+                                          f"the export has {pick[2]} with {pick[3]}"))
+    return bad
+
+
 def judge(export, dist, got, ceiling=None):
     bad = []
     if ceiling is not None:
@@ -456,6 +526,18 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         for name in ("graph-drop.js", "graph-label.js"):
             (copy / "graph" / f"{name[:-3]}.html").write_text(g.replace('src="../graph.js"', f'src="../{name}"'),
                                                              encoding="utf-8")
+        # 7. a search that drops its first result; a graph panel that counts one link short
+        script_copy("search/search.js", "search/search-drop.js", "shown = found.map(", "shown = found.slice(1).map(")
+        sp = (copy / "search" / "index.html").read_text(encoding="utf-8")
+        assert 'src="../search/search.js"' in sp
+        (copy / "search" / "drop.html").write_text(sp.replace('src="../search/search.js"', 'src="../search/search-drop.js"'),
+                                                   encoding="utf-8")
+        script_copy("graph.js", "graph-short.js", 'chosen.setAttribute("data-links", String(around[n.id].length));',
+                    'chosen.setAttribute("data-links", String(around[n.id].length - 1));')
+        (copy / "graph" / "short.html").write_text(g.replace('src="../graph.js"', 'src="../graph-short.js"'), encoding="utf-8")
+        search_case, pick_case = finding_cases(export, dist)
+        fs, fg = finding_run(chromium, copy, search_case, pick_case, tmp, "search/drop.html", "graph/short.html")
+        planted_finding = {k for k, _, _ in finding_judge(search_case, pick_case, fs, fg)}
         planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros]
                       + ([bad_text] if bad_text else []) + ([pinned] if pinned else []))
         with Server(copy) as base:
@@ -504,13 +586,15 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                 findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)} "
                                 f"(base sum {base_sum}, {page} base {got['math'][page][:2]} planted "
                                 f"{(planted['math'][page] or ())[:2]}, pages without a report {none[:3]})")
+    if planted_finding != {"search", "graph-pick"}:
+        findings.append(f"a search without its first result, and a panel one link short: judged {sorted(planted_finding)}")
     if findings:
         print("BROWSER CONTROL FAILED:", *findings, sep="\n  ")
         sys.exit(2)
     print("browser control: RED as planted (a bad formula, over its book's ceiling; the same in a chapter's text, over the "
           "text pages' ceiling; equation numbers pinned over their formulas; no report without the script; "
           "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
-          "label wrong)")
+          "label wrong; a search without its first result; the graph panel one link short)")
 
 
 def main():
@@ -527,6 +611,13 @@ def main():
     if a.control:
         controls(a.export, a.dist, a.chromium, a.jobs, got, ceiling)
     bad = judge(a.export, a.dist, got, ceiling)
+    search_case, pick_case = finding_cases(a.export, a.dist)
+    with tempfile.TemporaryDirectory() as tmp:
+        fs, fg = finding_run(a.chromium, a.dist, search_case, pick_case, tmp)
+    bad += finding_judge(search_case, pick_case, fs, fg)
+    for (q, place), said in zip(search_case, fs):
+        print(f"browser: search {q} found {said.get('results')}, first {said.get('first')}")
+    print(f"browser: graph panel {pick_case[1]}: {fg.get('node')}, {fg.get('links')} links")
     typeset = sum(v[0] for v in got["math"].values() if v)
     source = defaultdict(int)
     for p, v in got["math"].items():
@@ -542,7 +633,8 @@ def main():
     if bad:
         print(f"BROWSER RED: {len(bad)}")
         sys.exit(1)
-    print("BROWSER GREEN: every page's math is accounted for and every graph view draws the export's counts")
+    print("BROWSER GREEN: every page's math is accounted for, every graph view draws the export's counts, the search "
+          "finds the one place a phrase stands, and the graph's panel counts a node's links as the export does")
 
 
 if __name__ == "__main__":

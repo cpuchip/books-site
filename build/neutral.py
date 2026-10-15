@@ -13,6 +13,7 @@ EVIDENCE = [
     (r"the claudiverse shelf", "our checking pipeline"),
     (r"claudiverse judge(\.py)?", r"our answer checker"),
     (r"tutor's acceptance run", "the lesson checker's acceptance run"),
+    (r"by the books seat \(#[0-9]+\) and again by qwenniverse-fermion", "by two readers independently"),
     (r"awaiting abacus", "awaiting review"),
     (r"\babacus\b", "a reviewer"),
 ]
