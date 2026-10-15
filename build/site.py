@@ -472,7 +472,11 @@ def render_shelf(index, books, sa=()):
 <p class="lede">Books we read closely: each one's provenance, its chapters, its problems with the printed answers
 checked by computation, and the errata we found, with the evidence for each.</p>
 <ul class="shelf">{rows}</ul>{sa_shelf(sa)}"""
-    return page("Math and physics books", body, 0, "Public-domain and share-alike math and physics books, checked")
+    both = (f'Book data from <a href="{PD_BOOKS}">pd-books</a> (CC0)'
+            + (f' and <a href="{sapage.SA_BOOKS}">sa-books</a> (each book under its own CC BY-SA licence)' if sa else "")
+            + f'. Lessons that use these books:\n<a href="{LEARN}">learn.cpuchip.net</a>.')
+    return page("Math and physics books", body, 0, "Public-domain and share-alike math and physics books, checked",
+                licence=both)
 
 
 def sa_shelf(sa):
@@ -537,13 +541,18 @@ scroll to zoom, and tap a node to name it and reach its page.</p>
                 scripts=["vendor/3d-force-graph/3d-force-graph.min.js", "graph.js"])
 
 
-def render_about(pin):
+def render_about(pin, sa_pin=None):
+    sa = (f"""
+<p>The share-alike books are built from <a href="{sapage.SA_BOOKS}">sa-books</a> at <code>{e(sa_pin[:7])}</code>:
+newer books whose authors released them under a Creative Commons Attribution-ShareAlike licence. Each of their
+pages carries its credits and stays under its book's licence, and a build that loses a page, a word, a formula or
+a figure of them does not publish.</p>""" if sa_pin else "")
     body = f"""<h1>About</h1>
-<p>Every page here is built from <a href="{PD_BOOKS}">pd-books</a> at <code>{e(pin[:7])}</code>. A build that
+<p>The public-domain books are built from <a href="{PD_BOOKS}">pd-books</a> at <code>{e(pin[:7])}</code>. A build that
 loses a book, a problem or an erratum from that data does not publish. Corrections are welcome in pd-books.</p>
-<p>The books are in the public domain in the United States. Their transcriptions come from Project Gutenberg,
+<p>Those books are in the public domain in the United States. Their transcriptions come from Project Gutenberg,
 whose licence each book page quotes. Scans of the printed books are linked to the archive that holds them,
-not copied here.</p>"""
+not copied here.</p>{sa}"""
     return page("About", body, 1)
 
 
@@ -588,7 +597,7 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
         for rel, src in sa_figs.items():
             (dist / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dist / rel)
-        w("about/index.html", render_about(pin))
+        w("about/index.html", render_about(pin, sa_pin if sa_root else None))
         all_terms = terms_of(graph, books)
         check_relations(index.get("relations") or [], entries)
         names = {n["id"]: n.get("name") or "" for n in graph["nodes"]}

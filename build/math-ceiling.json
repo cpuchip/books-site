@@ -16,7 +16,8 @@
   "todhunter-spherical-trigonometry-1886": 3,
   "wentworth-first-steps-in-algebra-1894": 1,
   "wentworth-plane-geometry-1899": 1,
-  "whitehead-introduction-to-mathematics-1911": 1
+  "whitehead-introduction-to-mathematics-1911": 1,
+  "schnick-calculus-based-physics-2": 0
  },
  "history": {
   "planck-treatise-on-thermodynamics-1903": "200 to 204 on 2026-10-10, KaTeX's mhchem (\\\\ce) withheld while its Apache-2.0 licence was put to Michael; back to 200 on 2026-10-11, mhchem vendored with his approval (the rest of Planck's \\\\ce equations also need the book's own macros, \\\\aq and \\\\Unit)",
@@ -26,7 +27,8 @@
   "todhunter-spherical-trigonometry-1886 (text)": "34 at 3372745, 21 at 30d284c, 15 at 94f9c53, 11 at 68e2c0c, measured each time",
   "planck-treatise-on-thermodynamics-1903 (text)": "131 at 3372745, 0 at 2b5fd80 when its text pages were released, measured",
   "de-morgan-elementary-illustrations-calculus-1899 (text)": "22 at 3372745, 0 at 2b5fd80 when its text pages were released, measured",
-  "boyden-first-book-in-algebra-1895 (text)": "17 at 3372745, 0 at a64be42 when its text pages were released, measured"
+  "boyden-first-book-in-algebra-1895 (text)": "17 at 3372745, 0 at a64be42 when its text pages were released, measured",
+  "schnick-calculus-based-physics-2": "0 on 2026-10-15 at sa-books d9cc208, measured when its pages went on the site (the share-alike book, built from sa-books, not the pd-books export)"
  },
  "_text": "The same for each book's chapter text pages, counted apart so they cannot hide behind the book's (measured at 3372745, the first export where every chapter with text has a page; a released book's re-measured at each pin, 30d284c for Todhunter; a book held in build/text-hold.json keeps its last measure until it is released; a book not listed is held to 0).",
  "text": {

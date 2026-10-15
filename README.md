@@ -3,12 +3,16 @@
 The reader's site for the public-domain math and physics books in [cpuchip/pd-books](https://github.com/cpuchip/pd-books): one page per book with its provenance and licence, a chapter reader, the problems with checked answers, the errata with their evidence, and the concept graph that links the books to each other and to the lessons on learn.cpuchip.net.
 
 The site is built from `pd-books/export/` (CC0 data) and hosts no book scans; scans are linked to their archives.
+It also shows the share-alike books in [cpuchip/sa-books](https://github.com/cpuchip/sa-books), page by page from
+their transcriptions, each page with its credits and under its book's licence (`build/sapage.py`, checked by
+`tools/saoracle.py`; docs/BLUEPRINT.md, "The share-alike books").
 
-Code: MIT. Data: see pd-books (CC0 for everything we made; Project Gutenberg's licence for its files, kept intact).
+Code: MIT. Data: see pd-books (CC0 for everything we made; Project Gutenberg's licence for its files, kept intact)
+and sa-books (each book under its own CC BY-SA licence, which the pages that show it keep).
 
 ## Build
 
-    sh build.sh                       # fetch pd-books at pd-books.pin, build, check, write dist/
+    sh build.sh                       # fetch pd-books at pd-books.pin and sa-books at sa-books.pin, build, check, write dist/
     CHROMIUM=/path/to/chrome sh build.sh   # also the browser check (math typeset, 3D graph counts)
     docker build .                    # the deployed image: the build and its checks, then nginx serving dist
     python3 tools/verifylive.py URL DIST   # the live site serves exactly the rehearsed dist

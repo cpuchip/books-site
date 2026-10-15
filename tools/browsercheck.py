@@ -234,9 +234,12 @@ def run(export, dist, chromium, jobs, views=None, pages=None):
     """{"math": {page: (typeset, source) or None}, "graph": {view: (nodes, links) or None}}"""
     dist = Path(dist)
     if pages is None:
-        pages = sorted(p.relative_to(dist).as_posix() for p in dist.glob("books/*/index.html")) + sorted(
+        # a share-alike book's own page has no math (sapage.py); its pages, books/<slug>/<doc>/pNNN/, do
+        pages = sorted(p.relative_to(dist).as_posix() for p in dist.glob("books/*/index.html")
+                       if 'data-kind="sa-book"' not in p.read_text(encoding="utf-8")) + sorted(
             p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/index.html")) + sorted(
-            p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/text/index.html"))
+            p.relative_to(dist).as_posix() for p in dist.glob("books/*/ch/*/text/index.html")) + sorted(
+            p.relative_to(dist).as_posix() for p in dist.glob("books/*/*/p[0-9][0-9][0-9]/index.html"))
     views = views if views is not None else list(graph_views(export))
     out = {"math": {}, "graph": {}}
     with tempfile.TemporaryDirectory() as tmp, Server(dist) as base:
@@ -328,7 +331,9 @@ def judge(export, dist, got, ceiling=None):
             bad.append(("math", page, "no math report: the page's scripts did not run"))
             continue
         typeset, source, overflow, notes, equations, macros_used, tag_overlap = val
-        book = json.loads((Path(export) / "books" / f"{page.split('/')[1]}.json").read_text(encoding="utf-8"))["book"]
+        bfile = Path(export) / "books" / f"{page.split('/')[1]}.json"
+        # a share-alike book is not in the export, and its pages typeset with no macros (sapage.py)
+        book = json.loads(bfile.read_text(encoding="utf-8"))["book"] if bfile.is_file() else {"macros": {}}
         if macros_used is None or json.loads(macros_used) != (book.get("macros") or {}):
             bad.append(("math", page, f"KaTeX was given macros {str(macros_used)[:60]}, the export has "
                                       f"{json.dumps(book.get('macros') or {})[:60]}"))

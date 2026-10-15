@@ -91,3 +91,8 @@ article.text table.tex .rule-b { border-bottom: 1px solid currentColor; }
 article.text table.tex .rule-l { border-left: 1px solid currentColor; }
 article.text table.tex .rule-r { border-right: 1px solid currentColor; }
 article.text table.tex td, article.text table.tex th { white-space: nowrap; }  /* KaTeX breaks a long cell at + and − otherwise */
+/* a share-alike book's pages (build/sapage.py): the pager, the book page's page links, the credits under the text */
+.pager { margin: .6rem 0; }
+.pager a { margin-right: 1rem; }
+p.pages a { display: inline-block; min-width: 2.2rem; margin: .1rem 0; }
+section.credit { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
