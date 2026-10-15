@@ -122,18 +122,36 @@ def book_text(export):
 
 
 class _Text(HTMLParser):
+    """Text nodes and attributes; sa[i] says whether texts[i] is inside a share-alike book's page text
+    (<article data-kind="sa-page">), which tools/saoracle.py proves is sa-books' transcription, word for word."""
+    VOID = {"br", "img", "hr", "meta", "link", "input", "source", "wbr"}
+
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.texts, self.attrs = [], []
+        self.texts, self.attrs, self.sa = [], [], []
+        self.depth, self.sa_depth = 0, None
 
     def handle_starttag(self, tag, attrs):
         for k, v in attrs:
             if v:
                 self.attrs.append((k, v))
+        if tag in self.VOID:
+            return
+        self.depth += 1
+        if tag == "article" and ("data-kind", "sa-page") in attrs and self.sa_depth is None:
+            self.sa_depth = self.depth
+
+    def handle_endtag(self, tag):
+        if tag in self.VOID:
+            return
+        if self.sa_depth == self.depth:
+            self.sa_depth = None
+        self.depth -= 1
 
     def handle_data(self, data):
         if data.strip():
             self.texts.append(data)
+            self.sa.append(self.sa_depth is not None)
 
 
 def check(export, dist):
@@ -142,11 +160,11 @@ def check(export, dist):
     dist = Path(dist)
     bad = []
 
-    def judge(rel, s, where, raw_checked=False):
+    def judge(rel, s, where, raw_checked=False, quoted=False):
         if not raw_checked:
             bad.extend((rel, kind, s[:120]) for kind in leaks(s))
         flat = " ".join(s.split())
-        if flat in keep or flat in allow:
+        if quoted or flat in keep or flat in allow:
             return
         if EM in s:
             bad.append((rel, "em-dash", s[:120]))
@@ -167,8 +185,8 @@ def check(export, dist):
             # site's words; elsewhere only inside the export's own text, never in an attribute (2026-10-13: the
             # export's macros put it in 101 chapter pages' data-macros)
             book_page = re.fullmatch(r"books/[^/]+/index\.html|about/index\.html", rel) is not None
-            for s in t.texts:
-                judge(rel, s, "text")
+            for s, sa in zip(t.texts, t.sa):
+                judge(rel, s, "text", quoted=sa)
                 if not book_page and SOURCE.search(s) and " ".join(s.split()) not in keep | notes:
                     bad.append((rel, "the source's name outside a book page", s[:120]))
             if not book_page:
@@ -229,12 +247,20 @@ def control(export, dist):
         ct = re.sub(r"<main(?: data-macros=\"[^\"]*\")?>", '<main data-macros="{&quot;\\\\PGLicense&quot;: &quot;Project Gutenberg&quot;}">'
                     '<p>From Project Gutenberg.</p>', ct, count=1)
         ch.write_text(ct, encoding="utf-8")
+        # a share-alike page: our provenance line is checked, the book's own words beside it are not
+        sa = next(iter(sorted(copy.glob("books/*/*/p[0-9][0-9][0-9]/index.html"))), None)
+        if sa is not None:
+            st = sa.read_text(encoding="utf-8")
+            st = plant(st, r'<p class="n">Read from ', f"checked by abacus {EM} ")
+            st = plant(st, r'data-kind="sa-page"[^>]*>', f"<p>The book{EM}its own dash.</p>")
+            sa.write_text(st, encoding="utf-8")
         js = copy / "site.js"
         js.write_text(js.read_text(encoding="utf-8") + "\n// ghp_" + "x" * 36 + "\n", encoding="utf-8")
         got = sorted(why.split(" in ")[0] if why.startswith("seat") else why for _, why, _ in check(export, copy))
     want = sorted(["seat name 'qwenniverse-fermion'", "seat name 'tutor'", "em-dash", "seat name 'abacus'", "claude.ai link",
                    "private address", "local path", "internal hostname", "token",
-                   "the source's name in attribute data-macros", "the source's name outside a book page"])
+                   "the source's name in attribute data-macros", "the source's name outside a book page"]
+                  + (["em-dash", "seat name 'abacus'"] if sa is not None else []))
     if got != want:
         print(f"OUTWARD CONTROL FAILED: planted {want}, checker said {got}")
         sys.exit(2)

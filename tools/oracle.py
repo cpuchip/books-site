@@ -63,6 +63,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 KINDS = ("book", "chapter", "exercise_set", "excerpt", "equation", "problem", "erratum", "term", "relation", "text")
+# the share-alike books' kinds and their figures (images/<slug>/) are judged by tools/saoracle.py against sa-books,
+# named here so nothing else passes unjudged; their pages still meet the markup allowlist below
+SA_KINDS = ("sa-book", "sa-page")
 # URL contract (docs/BLUEPRINT.md), the parts the link check needs
 TERMS_PAGE = "books/{book}/terms/index.html"
 # the term types, copied from the blueprint (not imported from the build); a group per type
@@ -510,7 +513,10 @@ def text_pages_check(dist, export):
             mine, theirs = Path(dist) / src, Path(export) / src
             if not mine.is_file() or not theirs.is_file() or mine.read_bytes() != theirs.read_bytes():
                 bad[rel].append(f"image {src} is not the export's, byte for byte")
+    sa = {b.parent.name for b in Path(dist).glob("books/*/index.html") if 'data-kind="sa-book"' in b.read_text(encoding="utf-8")}
     for f in sorted(Path(dist).glob("images/**/*")):
+        if f.relative_to(dist).parts[1] in sa:
+            continue  # a share-alike book's figure: saoracle.py compares it with sa-books' file
         if f.is_file() and f.relative_to(dist).as_posix() not in used:
             bad[f.relative_to(dist).as_posix()].append("an image no text page uses")
     return bad
@@ -590,6 +596,8 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
     unknown-kind, and for a stated number (kind "count", id "page key") missing|extra|count."""
     out = []
     for (kind, i), hits in sorted(site.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
+        if kind in SA_KINDS:
+            continue
         if kind not in KINDS:
             out.append((kind, i, "unknown-kind", f"on {hits[0]['page']}"))
         elif (kind, i) not in units:

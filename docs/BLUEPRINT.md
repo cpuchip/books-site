@@ -420,6 +420,94 @@ dropped (math masked). At 3ed7925: 214 empty "( )" where a reference was, 126 se
 begin with a dot. All went to the data owner (#7830, #7834, #7835, #7846, #7848), who is fixing them in one export.
 The text pages go live after that export, this count, and a read of the pages.
 
+## The share-alike books (written 2026-10-15, before their code)
+
+Michael, on the books-sa card (2026-10-14, via basecamp #8250): "Show it, with the credits"; "that's fine to host cc
+by-sa on books that was kind of the point of looking into that licensing so we can host newer content."
+
+**Input.** [cpuchip/sa-books](https://github.com/cpuchip/sa-books) at `sa-books.pin`, fetched as pd-books is
+(`SA_BOOKS=/path` for a local checkout, whose HEAD must equal the pin and whose `books/` must be clean). Each book is
+`books/<slug>/book.json` and `books/<slug>/transcription/<doc>/pNNN.md` with its `fig/`. sa-books has no export, so
+the site reads the transcription itself. The build refuses a book.json without an author, a licence URL and
+statement, `attribution.title_as_modified` and `attribution.credit`. It also refuses a page without front matter
+(`source`, `credit`) or whose `credit` differs from the book's. A page that will not render is a refusal too, not
+a withheld page: a work under a share-alike licence goes up whole or not at all.
+
+**The licence, as read on 2026-10-15.** CC BY-SA 2.5 section 4 asks, wherever the work is shown, for:
+- the licence's URI with every copy;
+- the work's copyright notices kept intact;
+- the author's name, the work's title and its URI;
+- for a derivative work, a credit naming the use.
+
+It does not reach the rest of a collective work, so the site's code stays MIT and the public-domain books stay as
+they are. The author's [manner of attribution](http://www.cbphysics.org/howtoAttribute.html) asks for "online
+textbook Calculus-Based Physics by Jeffrey Schnick." on the same page as an excerpt, and the title "Calculus-Based
+Physics by Jeffrey Schnick as modified by" the modifier for a modified release.
+
+**The credit block, on every page that shows the work** (`<section class="credit">`):
+1. the modified release's title (`attribution.title_as_modified`);
+2. the excerpt line, verbatim from the author's page;
+3. the copyright statement (`licence.statement`), as the book prints it;
+4. `attribution.credit`, which names the source and the licence URIs, both as links.
+
+The oracle compares each of these with book.json. The footer of those pages says the page is under CC BY-SA 2.5
+(linked) and the site's code is MIT; it does not say CC0 there.
+
+**Pages.**
+- The shelf gets a second list, "Share-alike books (CC BY-SA)". The site's name in the header becomes "Math and
+  physics books", since it is no longer only public domain.
+- `books/<slug>/index.html`, the book page, holds:
+  - the title as modified, with the author and his affiliation;
+  - the credit block;
+  - "What we changed": transcribed from the author's PDFs and .doc, figures cut from the page images, some pages
+    proofread, and how each page was read, linked to the evidence README in sa-books at the pin;
+  - each source file's URL on cbphysics.org;
+  - each document, with its page count and a link to every page.
+- `books/<slug>/<doc>/<pNNN>/index.html`, one per transcription page, holds:
+  - a crumb back to the book;
+  - "Page N of <document title>", with previous and next links;
+  - the credit block;
+  - the page itself (`<article class="text" data-kind="sa-page" data-id="<slug>/<doc>/<pNNN>">`);
+  - its source page and how it was read (the front matter's `source` and `reading`).
+
+**The Markdown** (census at sa-books d9cc208: 633 pages). It has headings, paragraphs, flat `-` lists, `N.` lists,
+images, pipe tables, raw `<table>/<tr>/<td>/<br>/<img>`, `**bold**`, `*italic*`, `\*` escapes, entities, and math
+as `$..$`, `$$..$$`, `\(..\)` and `\[..\]`. It has no links, code, nesting, blockquotes or footnotes.
+`build/sapage.py` renders that subset and nothing else. Math becomes the chapter text pages' spans
+(`<span class="math inline">\(..\)</span>`, `display` with `\[..\]`), so `site.js` typesets it unchanged. `N.`
+items keep the page's own number (`<li value>`). `N)` and `a)` lines stay text. Then the HTML goes through
+`textpage.sanitize`, the same allowlist as the chapter text, with images under `images/<slug>/<doc>/fig/`.
+
+**The oracle for these pages** (`tools/saoracle.py`, its own Markdown reading, nothing imported from the build):
+- every page file is on the site once, at its URL, and no sa-page is there that sa-books lacks;
+- each page's words (everything outside math, with Markdown's own markers taken out) equal the article's words
+  outside math, in order, as a sequence;
+- each page's formulas equal the article's math spans, in order;
+- each figure it references is an `<img>` in the article whose file is byte-identical to sa-books';
+- the credit block on every sa page and on the book page equals book.json's strings, with the licence and source
+  links;
+- the book page links every page once.
+
+It plants faults, each of which must come back red with exactly its own findings:
+- drop a page;
+- add a page sa-books lacks;
+- blank one page's credit;
+- point one page's licence link elsewhere;
+- drop a word from a paragraph;
+- change one formula;
+- drop a figure;
+- swap a figure's bytes.
+
+`tools/oracle.py` hands the kinds `sa-book` and `sa-page` to it by name and still holds every sa page to the
+markup allowlist.
+
+**The other checks.**
+- The browser check visits every sa page, against a measured ceiling for the book in `math-ceiling.json`.
+- The outward check exempts an sa page's article text (the book's words), as it exempts quoted book fields, and
+  checks the credits, provenance lines and our own text.
+- The link check requests cbphysics.org and the licence page like any external link.
+- `version.json` carries the sa-books pin.
+
 ## Deploy
 
 **Before this repo goes public** (Michael's call). Michael ruled on 2026-10-10 (decision 84) that his own

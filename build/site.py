@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import neutral  # noqa: E402
+import sapage  # noqa: E402
 import textpage  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -82,8 +83,9 @@ MATH_JS = ["vendor/katex/katex.min.js", "vendor/katex/contrib/auto-render.min.js
 CHEM_JS = "vendor/katex/contrib/mhchem.min.js"  # KaTeX's \ce and \pu (Apache-2.0); only on pages that use them
 
 
-def page(title, body, depth, desc="", math=None, scripts=()):
-    """math: None for a page without math, else the book's macros (a dict) for KaTeX."""
+def page(title, body, depth, desc="", math=None, scripts=(), licence=None):
+    """math: None for a page without math, else the book's macros (a dict) for KaTeX. licence: the footer's
+    sentence for a page that shows a share-alike book (sapage.py), in place of the public-domain data line."""
     up = "../" * depth
     css = "".join(f'\n<link rel="stylesheet" href="{up}{c}">' for c in (MATH_CSS if math is not None else []))
     mjs = MATH_JS if math is not None else []
@@ -103,13 +105,12 @@ def page(title, body, depth, desc="", math=None, scripts=()):
 <link rel="stylesheet" href="{up}site.css">{css}
 </head>
 <body>
-<header class="top"><a class="brand" href="{up}index.html">Public-domain books</a>
+<header class="top"><a class="brand" href="{up}index.html">Math and physics books</a>
 <nav><a href="{up}graph/index.html">Concept graph</a> <a href="{up}about/index.html">About</a></nav></header>
 <main{main_attrs}>
 {body}
 </main>
-<footer class="foot"><p>Book data from <a href="{PD_BOOKS}">pd-books</a> (CC0). Lessons that use these books:
-<a href="{LEARN}">learn.cpuchip.net</a>. Site code MIT; the libraries it uses are listed in
+<footer class="foot"><p>{licence or f'Book data from <a href="{PD_BOOKS}">pd-books</a> (CC0). Lessons that use these books:\n<a href="{LEARN}">learn.cpuchip.net</a>.'} Site code MIT; the libraries it uses are listed in
 <a href="{up}vendor/THIRD-PARTY-NOTICES.txt">their notices</a>.</p>{report}</footer>{js}
 </body>
 </html>
@@ -459,18 +460,35 @@ def render_chapter(d, c, text_state=None):
     return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4, math=b.get("macros") or {})
 
 
-def render_shelf(index, books):
+def render_shelf(index, books, sa=()):
     rows = "".join(
         f'<li class="book" data-kind="book" data-id="{e(d["book"]["id"])}"><a href="books/{e(d["book"]["id"])}/index.html">'
         f'{e(d["book"]["title"])}</a> <span class="by">{e(", ".join(d["book"].get("authors") or []))}, '
         f'{e(str(d["book"].get("year", "")))}</span> <span class="n">{len(d["chapters"])} chapters, '
         f'{len(d["problems"])} problems, {len(d.get("errata") or [])} errata</span></li>'
         for d in books)
-    body = f"""<h1>Public-domain math and physics books</h1>
+    body = f"""<h1>Math and physics books</h1>
+<h2>Public-domain books</h2>
 <p class="lede">Books we read closely: each one's provenance, its chapters, its problems with the printed answers
 checked by computation, and the errata we found, with the evidence for each.</p>
+<ul class="shelf">{rows}</ul>{sa_shelf(sa)}"""
+    return page("Math and physics books", body, 0, "Public-domain and share-alike math and physics books, checked")
+
+
+def sa_shelf(sa):
+    """The share-alike books (sapage.py): (slug, book.json, page count) each."""
+    if not sa:
+        return ""
+    rows = "".join(
+        f'<li class="book" data-kind="sa-book" data-id="{e(slug)}"><a href="books/{e(slug)}/index.html">'
+        f'{e(b["attribution"]["title_as_modified"])}</a> <span class="by">{e(b["author"])}, {e(str(b.get("year", "")))}'
+        f'</span> <span class="n">{n} pages, <a href="{e(b["licence"]["url"])}">{e(b["licence"]["name"])}</a></span></li>'
+        for slug, b, n in sa)
+    return f"""
+<h2>Share-alike books (CC BY-SA)</h2>
+<p class="lede">Newer books whose authors released them under a Creative Commons Attribution-ShareAlike licence,
+transcribed page by page. Each page carries its credits, and each stays under its book's licence.</p>
 <ul class="shelf">{rows}</ul>"""
-    return page("Public-domain math and physics books", body, 0, "Public-domain math and physics books, checked")
 
 
 def node_urls(books, all_terms):
@@ -529,8 +547,29 @@ not copied here.</p>"""
     return page("About", body, 1)
 
 
-def build(export, out, pin, pd_books_check=True):
+def sa_books(root, sa_pin):
+    """Every book in an sa-books checkout: ({site path: html}, {site path: figure file}, [(slug, book, pages)])."""
+    files, figs, shelf = {}, {}, []
+    for bj in sorted(Path(root, "books").glob("*/book.json")):
+        slug = bj.parent.name
+        try:
+            f, g, (book, n) = sapage.build_pages(Path(root), slug, sa_pin, page)
+        except sapage.Refused as x:
+            refuse(f"sa-books: {x}")
+        files.update(f)
+        figs.update(g)
+        shelf.append((slug, book, n))
+    if not shelf:
+        refuse(f"sa-books at {root} has no book")
+    return files, figs, shelf
+
+
+def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
     index, books, graph = load(export, pd_books_check)
+    sa_files, sa_figs, sa_shelf_rows = sa_books(sa_root, sa_pin) if sa_root else ({}, {}, [])
+    for p in sa_files:
+        if any(p.startswith(f"books/{b['id']}/") for b in index["books"]):
+            refuse(f"sa-books page {p} would overwrite a pd-books page")
     generated = (index.get("generated_from") or {}).get("generated_at", "")
     entries = {b["id"]: b for b in index["books"]}
     with tempfile.TemporaryDirectory(dir=Path(out).parent if Path(out).parent.exists() else None) as tmp:
@@ -543,7 +582,12 @@ def build(export, out, pin, pd_books_check=True):
             p.write_text(s, encoding="utf-8", newline="\n")
 
         shutil.copy(HERE / "site.css", dist / "site.css")
-        w("index.html", render_shelf(index, books))
+        w("index.html", render_shelf(index, books, sa_shelf_rows))
+        for rel, s in sa_files.items():
+            w(rel, s)
+        for rel, src in sa_figs.items():
+            (dist / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dist / rel)
         w("about/index.html", render_about(pin))
         all_terms = terms_of(graph, books)
         check_relations(index.get("relations") or [], entries)
@@ -579,15 +623,19 @@ def build(export, out, pin, pd_books_check=True):
         for f in ("site.js", "graph.js"):
             shutil.copy(HERE / f, dist / f)
         shutil.copytree(HERE / "vendor", dist / "vendor")
-        w("version.json", json.dumps({"pd_books": pin, "export_generated_at": generated,
-                                      "books": len(books)}, indent=1) + "\n")
+        version = {"pd_books": pin, "export_generated_at": generated, "books": len(books)}
+        if sa_root:
+            version.update({"sa_books": sa_pin, "sa_books_books": len(sa_shelf_rows)})
+        w("version.json", json.dumps(version, indent=1) + "\n")
         out = Path(out)
         if out.exists():
             shutil.rmtree(out)
         shutil.move(str(dist), str(out))
     print(f"built {out}: {len(books)} books, {sum(len(d['chapters']) for d in books)} chapter pages, "
           f"{sum(len(d['problems']) for d in books)} problems, {sum(len(d.get('errata') or []) for d in books)} errata, "
-          f"{n_text} chapter text pages, {len(withheld)} withheld")
+          f"{n_text} chapter text pages, {len(withheld)} withheld"
+          + (f"; sa-books {sa_pin[:7]}: {len(sa_shelf_rows)} books, {len(sa_files) - len(sa_shelf_rows)} pages, "
+             f"{len(sa_figs)} figures" if sa_root else ""))
     for cid, why in withheld:
         print(f"  text withheld: {cid}: {why}")
 
@@ -598,9 +646,12 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--pin", help="pd-books commit (default: read pd-books.pin)")
     ap.add_argument("--no-checks", action="store_true")
+    ap.add_argument("--sa-books", help="an sa-books checkout at --sa-pin (its books are built beside pd-books')")
+    ap.add_argument("--sa-pin", help="sa-books commit (default: read sa-books.pin)")
     a = ap.parse_args()
     pin = a.pin or (HERE.parent / "pd-books.pin").read_text().strip()
-    build(a.export, a.out, pin, not a.no_checks)
+    sa_pin = (a.sa_pin or (HERE.parent / "sa-books.pin").read_text().strip()) if a.sa_books else None
+    build(a.export, a.out, pin, not a.no_checks, a.sa_books, sa_pin)
 
 
 if __name__ == "__main__":
