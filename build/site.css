@@ -13,6 +13,10 @@
   --bg: #161614; --fg: #e8e5dd; --muted: #a29e93; --rule: #34322d; --accent: #8db6dc;
   --ok: #8fc79a; --warn: #e0b56a; --code-bg: #23221f;
 }
+/* form controls and scrollbars follow the theme too: the system's, or the reader's choice (theme.js) */
+:root { color-scheme: light dark; }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 Georgia, "Iowan Old Style", serif; }
 a { color: var(--accent); }
@@ -132,3 +136,11 @@ article.text > :target { background: color-mix(in srgb, var(--accent) 12%, trans
 .graph-key label { cursor: pointer; }
 .swatch { display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%; margin: 0 0.4em 0 0.3em; vertical-align: -0.05em; }
 .said { margin: 0.4em 0 0; min-height: 0; color: var(--muted); font-size: 90%; }
+
+/* the theme button (made by theme.js; the page has none without scripts) */
+.theme-toggle { margin-left: 1rem; font: inherit; color: var(--accent); background: none; border: 1px solid var(--rule);
+                border-radius: 0.3em; padding: 0 0.5em; cursor: pointer; }
+.theme-toggle:hover, .theme-toggle:focus { border-color: var(--accent); }
+/* a snippet's formula wider than a phone scrolls in its own box, not the page (found at 390px, 2026-10-15) */
+.hit .snip .katex { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
+.hit .snip .katex-display { margin: 0.2em 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; }

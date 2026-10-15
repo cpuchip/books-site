@@ -103,6 +103,7 @@ def page(title, body, depth, desc="", math=None, scripts=(), licence=None, style
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
+<script src="{up}theme.js"></script>
 <link rel="icon" href="{up}favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="{up}site.css">{css}
 </head>
@@ -756,7 +757,7 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
         g = compact_graph(graph, node_urls(books, all_terms))
         w("graph/graph.json", json.dumps(g, ensure_ascii=False, separators=(",", ":")))
         w("graph/index.html", render_graph_page(g, books, entries))
-        for f in ("site.js", "graph.js", "favicon.svg"):
+        for f in ("site.js", "graph.js", "theme.js", "favicon.svg"):
             shutil.copy(HERE / f, dist / f)
         n_pages, n_units, n_words = search.build(dist)  # from the finished pages; the search page is not indexed
         w("search/index.html", render_search_page(books, sa_shelf_rows))

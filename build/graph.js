@@ -119,6 +119,12 @@
       .onBackgroundClick(function () { picked = null; light(null); show(null); refresh(); })
       .graphData({ nodes: nodes, links: links });
     var refresh = function () { graph.nodeColor(graph.nodeColor()); };
+    // the reader switched theme (theme.js): the canvas takes the new page colours
+    document.addEventListener("themechange", function () {
+      var now = getComputedStyle(document.documentElement);
+      graph.backgroundColor(now.getPropertyValue("--code-bg").trim() || "#f4f1ea");
+      graph.linkColor(function () { return now.getPropertyValue("--muted").trim() || "#888"; });
+    });
     // the panel: the node's kind and name, its page, its links in this view, its neighbours by link type
     var show = function (n) {
       if (!chosen) return;

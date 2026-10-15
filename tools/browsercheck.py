@@ -379,9 +379,60 @@ def finding_judge(searches, pick, s, g):
     for (q, place), got in zip(searches, s):
         if got.get("first") != place or got.get("results") != "1":
             bad.append(("search", q, f"found {got.get('results')} places, first {got.get('first')}; the one place is {place}"))
+        elif got.get("overflow") != "0":
+            bad.append(("search", q, f"the results page is wider than a {WINDOW.split(',')[0]}px window by {got.get('overflow')}px"))
     if g.get("node") != pick[2] or g.get("links") != str(pick[3]):
         bad.append(("graph-pick", pick[1], f"the panel names {g.get('node')} with {g.get('links')} links; "
                                           f"the export has {pick[2]} with {pick[3]}"))
+    return bad
+
+
+THEME_KEY = "books-theme"  # copied from build/theme.js, not imported
+
+
+def theme_run(chromium, dist, tmp, theme_js=None):
+    """{stored: (data-theme on <html>, the button's data-next)} for a page opened after a choice was stored (dark,
+    light) or none was. A root of links to DIST holds three pages that set the browser's storage and go on to the
+    about page, in a profile of their own; theme_js (a planted script) replaces the site's when given."""
+    root = Path(tmp) / "theme-root"
+    root.mkdir()
+    for f in Path(dist).iterdir():
+        if theme_js is None or f.name != "theme.js":
+            (root / f.name).symlink_to(f.resolve())
+    if theme_js is not None:
+        (root / "theme.js").write_text(theme_js, encoding="utf-8")
+    out = {}
+    with Server(root) as base:
+        for stored in ("dark", "light", "none"):
+            act = (f'localStorage.setItem("{THEME_KEY}", "{stored}")' if stored != "none"
+                   else f'localStorage.removeItem("{THEME_KEY}")')
+            (root / f"set-{stored}.js").write_text(f'{act};\nlocation.replace("about/index.html");\n', encoding="utf-8")
+            (root / f"set-{stored}.html").write_text(f'<!doctype html><script src="set-{stored}.js"></script>\n',
+                                                     encoding="utf-8")
+            dom = dump(chromium, base + f"set-{stored}.html", 3000, Path(tmp) / f"theme-{stored}")
+            html_tag = re.search(r"<html[^>]*>", dom)
+            theme = re.search(r'data-theme="([^"]*)"', html_tag.group(0)) if html_tag else None
+            button = re.search(r'<button[^>]*class="theme-toggle"[^>]*>', dom)
+            nxt = re.search(r'data-next="([^"]*)"', button.group(0)) if button else None
+            out[stored] = (theme.group(1) if theme else None, nxt.group(1) if nxt else None)
+    return out
+
+
+def theme_judge(dist, got):
+    """The choice is applied and the button offers the other theme; nothing stored follows the system (headless
+    Chromium's is light). And the stylesheet's chosen-dark palette is its system-dark palette, token for token."""
+    bad = []
+    want = {"dark": ("dark", "light"), "light": ("light", "dark"), "none": (None, "dark")}
+    for k, w in want.items():
+        if got.get(k) != w:
+            bad.append(("theme", k, f"stored {k}: the page has data-theme {got.get(k, (None,))[0]!r} and offers "
+                                    f"{(got.get(k) or (None, None))[1]!r}; expected {w}"))
+    css = (Path(dist) / "site.css").read_text(encoding="utf-8")
+    media = re.search(r'@media \(prefers-color-scheme: dark\) \{\s*:root:not\(\[data-theme="light"\]\) \{([^}]*)\}', css)
+    chosen = re.search(r':root\[data-theme="dark"\] \{([^}]*--bg[^}]*)\}', css)
+    tokens = lambda block: sorted(" ".join(x.split()) for x in block.split(";") if x.strip())
+    if not media or not chosen or tokens(media.group(1)) != tokens(chosen.group(1)):
+        bad.append(("theme", "site.css", "the chosen-dark palette is not the system-dark palette"))
     return bad
 
 
@@ -537,6 +588,11 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         (copy / "graph" / "short.html").write_text(g.replace('src="../graph.js"', 'src="../graph-short.js"'), encoding="utf-8")
         search_case, pick_case = finding_cases(export, dist)
         fs, fg = finding_run(chromium, copy, search_case, pick_case, tmp, "search/drop.html", "graph/short.html")
+        # 8. a theme script that forgets the reader's choice
+        deaf = (Path(dist) / "theme.js").read_text(encoding="utf-8")
+        assert "stored = localStorage.getItem(KEY);" in deaf
+        planted_theme = {k for k, _, _ in theme_judge(dist, theme_run(
+            chromium, dist, tmp, deaf.replace("stored = localStorage.getItem(KEY);", "stored = null;")))}
         planted_finding = {k for k, _, _ in finding_judge(search_case, pick_case, fs, fg)}
         planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros]
                       + ([bad_text] if bad_text else []) + ([pinned] if pinned else []))
@@ -586,6 +642,8 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                 findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)} "
                                 f"(base sum {base_sum}, {page} base {got['math'][page][:2]} planted "
                                 f"{(planted['math'][page] or ())[:2]}, pages without a report {none[:3]})")
+    if planted_theme != {"theme"}:
+        findings.append(f"a theme script that forgets the reader's choice: judged {sorted(planted_theme)}")
     if planted_finding != {"search", "graph-pick"}:
         findings.append(f"a search without its first result, and a panel one link short: judged {sorted(planted_finding)}")
     if findings:
@@ -594,7 +652,8 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
     print("browser control: RED as planted (a bad formula, over its book's ceiling; the same in a chapter's text, over the "
           "text pages' ceiling; equation numbers pinned over their formulas; no report without the script; "
           "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
-          "label wrong; a search without its first result; the graph panel one link short)")
+          "label wrong; a search without its first result; the graph panel one link short; a theme script that forgets the "
+          "reader's choice)")
 
 
 def main():
@@ -615,6 +674,10 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         fs, fg = finding_run(a.chromium, a.dist, search_case, pick_case, tmp)
     bad += finding_judge(search_case, pick_case, fs, fg)
+    with tempfile.TemporaryDirectory() as tmp:
+        themes = theme_run(a.chromium, a.dist, tmp)
+    bad += theme_judge(a.dist, themes)
+    print(f"browser: theme {themes}")
     for (q, place), said in zip(search_case, fs):
         print(f"browser: search {q} found {said.get('results')}, first {said.get('first')}")
     print(f"browser: graph panel {pick_case[1]}: {fg.get('node')}, {fg.get('links')} links")

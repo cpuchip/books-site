@@ -175,6 +175,9 @@
       });
       if (showing < shown.length) { list.parentNode.insertBefore(more, list.nextSibling); }
       else if (more.parentNode) { more.parentNode.removeChild(more); }
+      // how far the page is wider than its window with these results in it (the browser check requires 0)
+      var root = document.documentElement;
+      report.setAttribute("data-overflow", String(Math.max(0, root.scrollWidth - root.clientWidth)));
     });
   };
 

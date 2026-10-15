@@ -1357,7 +1357,10 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ]
         if img:
             site_plants += [
-                ("change one bit of a text page's image", lambda c: plant_flip_image(c, img), {("page", img_page, "markup")}),
+                # every text page that shows the image sees the change (De Morgan uses one figure in two chapters)
+                ("change one bit of a text page's image", lambda c: plant_flip_image(c, img),
+                 {("page", units[("text", i)]["page"], "markup") for i in texts
+                  if f'src="../../../../../{img}"' in (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8")}),
                 ("copy an image no page uses", lambda c: shutil.copyfile(c / img, c / (img + ".planted.png")),
                  {("page", img + ".planted.png", "markup")}),
             ]

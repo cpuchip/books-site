@@ -607,6 +607,27 @@ for `/favicon.ico` (basecamp's DevTools pass, 2026-10-15: its 404 was the only c
   as many links as the export gives it in that view. Controls: a search script that drops its first result, a
   panel that counts one link short.
 
+## Light and dark (2026-10-15; written after a small build, out of the usual order, and said so here)
+
+Michael, 2026-10-15: "could we get light/dark modes working for this and primer's sites as easy toggles with memory
+of what the use selected in browser storage?"
+
+- The palettes were already there (site.css: light on `:root`, dark under `prefers-color-scheme` guarded by
+  `:root:not([data-theme="light"])`, and again under `:root[data-theme="dark"]`). `build/theme.js`, loaded in each
+  page's head so the choice is applied before the page is drawn, sets `<html data-theme>` from localStorage
+  (`books-theme`, read and written inside try/catch: blocked storage means the site follows the system). It adds one
+  button to the header ("Dark" or "Light", the theme it switches to); a click switches and remembers. A reader who
+  never chose follows the system setting, also as it changes. Without scripts there is no button and the system
+  setting rules. `color-scheme` follows the theme, so form controls and scrollbars do too; the graph's canvas
+  takes the new colours on the "themechange" event theme.js sends.
+- Primer's sites (learn.cpuchip.net, calc.cpuchip.net) are primer's to change: books sent primer the request and
+  this design, with the script, in the message.
+- The browser check: three pages that store dark, light, or nothing and go on to a real page; that page must carry
+  the stored theme and offer the other one (nothing stored: no data-theme, headless Chromium's light, offering
+  dark); and site.css's chosen-dark palette must equal its system-dark palette token for token. Control: a theme
+  script that ignores storage. The search page now reports its overflow with its results and the check requires 0
+  (a Planck formula in a snippet was 79px wider than a 390px phone; it now scrolls in its own box).
+
 ## Deploy
 
 **Before this repo goes public** (Michael's call). Michael ruled on 2026-10-10 (decision 84) that his own
