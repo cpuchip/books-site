@@ -550,8 +550,9 @@ a figure of them does not publish.</p>""" if sa_pin else "")
     body = f"""<h1>About</h1>
 <p>The public-domain books are built from <a href="{PD_BOOKS}">pd-books</a> at <code>{e(pin[:7])}</code>. A build that
 loses a book, a problem or an erratum from that data does not publish. Corrections are welcome in pd-books.</p>
-<p>Those books are in the public domain in the United States. Their transcriptions come from Project Gutenberg,
-whose licence each book page quotes. Scans of the printed books are linked to the archive that holds them,
+<p>Those books are in the public domain in the United States. Their transcriptions come from
+<a href="https://www.gutenberg.org/">Project Gutenberg</a>, whose licence each book page quotes, with a link to the
+book's own page there. Scans of the printed books are linked to the archive that holds them,
 not copied here.</p>{sa}"""
     return page("About", body, 1)
 

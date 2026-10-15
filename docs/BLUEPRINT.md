@@ -219,6 +219,11 @@ or `\pu{` load it, after `katex.min.js`.
 show the book's own words with every Project Gutenberg header, footer, licence and reference removed, and carry
 no Project Gutenberg name or link. The link to the PG ebook stays only in the book page's provenance section (the
 "Where this came from" of his ruling), which already quotes the transcription's licence as it states it.
+Amended by Michael on 2026-10-15 (B3, via basecamp #8318: "Yes I want the extra link back you suggest too pg as
+well"): the About page's acknowledgement also links Project Gutenberg's home page. The basis is PG's own pages, read
+that day: "references to Project Gutenberg (with links, please!) in acknowledgements sections, reference sections or
+colophons" are not use of the trademark (gutenberg.org/policy/license.html), and "No permission is needed to link to
+www.gutenberg.org" (gutenberg.org/policy/permission.html). Text pages still carry neither the name nor a link.
 
 **Math.** `build/site.js` (ours) typesets in the reader's browser: every `data-field="latex"` element as display
 math, and `$...$` inside every text field, with the book's own macros (`book.macros` in the export, carried on the
