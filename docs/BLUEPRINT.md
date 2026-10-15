@@ -474,8 +474,9 @@ The oracle compares each of these with book.json. The footer of those pages says
 images, pipe tables, raw `<table>/<tr>/<td>/<br>/<img>`, `**bold**`, `*italic*`, `\*` escapes, entities, and math
 as `$..$`, `$$..$$`, `\(..\)` and `\[..\]`. It has no links, code, nesting, blockquotes or footnotes.
 `build/sapage.py` renders that subset and nothing else. Math becomes the chapter text pages' spans
-(`<span class="math inline">\(..\)</span>`, `display` with `\[..\]`), so `site.js` typesets it unchanged. `N.`
-items keep the page's own number (`<li value>`). `N)` and `a)` lines stay text. Then the HTML goes through
+(`<span class="math inline">\(..\)</span>`, `display` with `\[..\]`), so `site.js` typesets it unchanged. A
+numbered line (`N.` or `N)`) is a paragraph of its own with its number kept as text, so the page's own numbering
+reads as printed; `a)` lines stay text too. Then the HTML goes through
 `textpage.sanitize`, the same allowlist as the chapter text, with images under `images/<slug>/<doc>/fig/`.
 
 **The oracle for these pages** (`tools/saoracle.py`, its own Markdown reading, nothing imported from the build):
@@ -497,6 +498,14 @@ It plants faults, each of which must come back red with exactly its own findings
 - change one formula;
 - drop a figure;
 - swap a figure's bytes.
+
+**What it cannot see** (found by the fresh-eyes review, 2026-10-15): a star or underscore that Markdown reads as
+emphasis but the page meant literally. For example, `*Footnote ... the factor* above` becomes italics, and both
+stars are gone. The words still match, so no finding is raised, and any counting rule built on Markdown's pairing
+shares that blindness. The same goes for a line that opens with `- ` and was meant as a minus sign. Neither occurs
+at d9cc208: the reviewer counted every such character outside math, page by page (no mismatches), checked that
+every bare footnote star survives (quiz answers p054, p072, p119, p124, p140), and found the only `+ `/`- ` lines
+inside display math (p094). Re-run that census before a second book goes on.
 
 `tools/oracle.py` hands the kinds `sa-book` and `sa-page` to it by name and still holds every sa page to the
 markup allowlist.
