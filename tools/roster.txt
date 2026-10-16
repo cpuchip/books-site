@@ -3,8 +3,10 @@
 # in all text the site or the pipeline wrote; [common] only marks the ones that are ordinary words too, whose
 # genuine uses in book text are listed one by one in outward-allow.txt.
 # Not listed: "books", this seat's working name, which is also the site's subject; the site cannot avoid
-# the word, so checking it would only ever be noise.
+# the word, so checking it would only ever be noise. Its credit phrase is listed instead (2026-10-16: the export's
+# evidence said "again by the books seat (#8838)", which no name here could see).
 [distinct]
+books seat
 workspace-basecamp
 basecamp
 qwenniverse-fermion

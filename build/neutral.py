@@ -12,8 +12,11 @@ EVIDENCE = [
     (r"Flagged by the claudiverse shelf:", "Flagged by our checking pipeline:"),
     (r"the claudiverse shelf", "our checking pipeline"),
     (r"claudiverse judge(\.py)?", r"our answer checker"),
+    (r"claudiverse [A-Za-z_]+\.py", "our checking script"),
+    (r"claudiverse adjudication", "our checking pipeline's adjudication"),
     (r"tutor's acceptance run", "the lesson checker's acceptance run"),
     (r"by the books seat \(#[0-9]+\) and again by qwenniverse-fermion", "by two readers independently"),
+    (r"by the books seat(?: \(#[0-9]+\)|, #[0-9]+)?", "by a second reader"),  # after the line above, which it would cut in two
     (r"awaiting abacus", "awaiting review"),
     (r"\babacus\b", "a reviewer"),
 ]
