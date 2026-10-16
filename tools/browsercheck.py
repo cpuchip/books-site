@@ -433,6 +433,33 @@ def theme_judge(dist, got):
     tokens = lambda block: sorted(" ".join(x.split()) for x in block.split(";") if x.strip())
     if not media or not chosen or tokens(media.group(1)) != tokens(chosen.group(1)):
         bad.append(("theme", "site.css", "the chosen-dark palette is not the system-dark palette"))
+        return bad
+    bad += palette_judge(css)
+    return bad
+
+
+TEXT_TOKENS = ("fg", "muted", "accent", "ok", "warn")  # the colours text is set in; bg and code-bg are what it is on
+
+
+def palette_judge(css):
+    """Every colour token of the light palette has a dark value, and each text token reaches 4.5:1 (WCAG AA) on the
+    page and on the code background, in both themes (primer found a token with no dark value, at 2.85:1)."""
+    def palette(block):
+        return dict(re.findall(r"--([a-z-]+):\s*(#[0-9a-fA-F]{6})", block))
+    light = palette(re.search(r":root \{([^}]*)\}", css).group(1))
+    dark = palette(re.search(r':root\[data-theme="dark"\] \{([^}]*--bg[^}]*)\}', css).group(1))
+
+    def lum(h):
+        c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    ratio = lambda a, b: (max(lum(a), lum(b)) + 0.05) / (min(lum(a), lum(b)) + 0.05)
+    bad = [("theme", f"--{k}", "has no dark value") for k in sorted(set(light) - set(dark))]
+    for name, pal in (("light", light), ("dark", dark)):
+        for k in TEXT_TOKENS:
+            for ground in ("bg", "code-bg"):
+                if k in pal and ground in pal and ratio(pal[k], pal[ground]) < 4.5:
+                    bad.append(("theme", f"--{k}", f"{ratio(pal[k], pal[ground]):.2f}:1 on --{ground} in {name}"))
     return bad
 
 
@@ -593,6 +620,11 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
         assert "stored = localStorage.getItem(KEY);" in deaf
         planted_theme = {k for k, _, _ in theme_judge(dist, theme_run(
             chromium, dist, tmp, deaf.replace("stored = localStorage.getItem(KEY);", "stored = null;")))}
+        # 9. a muted colour too pale for the light page, and a token with no dark value
+        css0 = (Path(dist) / "site.css").read_text(encoding="utf-8")
+        assert "--muted: #6a675f;" in css0
+        pale = {why for _, _, why in palette_judge(css0.replace("--muted: #6a675f;", "--muted: #b5b2aa;", 1))}
+        lone = {key for _, key, _ in palette_judge(css0.replace("--warn: #8a5a12;", "--warn: #8a5a12; --err: #b00020;", 1))}
         planted_finding = {k for k, _, _ in finding_judge(search_case, pick_case, fs, fg)}
         planted = run(export, copy, chromium, jobs, views=[], pages=[bad_formula, no_script, typeset_x, too_wide, rotated, wrong_macros]
                       + ([bad_text] if bad_text else []) + ([pinned] if pinned else []))
@@ -642,6 +674,8 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
                 findings.append(f"one more formula as source in {key} did not trip its ceiling {ceiling.get(key)} "
                                 f"(base sum {base_sum}, {page} base {got['math'][page][:2]} planted "
                                 f"{(planted['math'][page] or ())[:2]}, pages without a report {none[:3]})")
+    if not any("on --bg in light" in w for w in pale) or "--err" not in lone:
+        findings.append(f"a pale muted colour and a token with no dark value: judged {sorted(pale)}, {sorted(lone)}")
     if planted_theme != {"theme"}:
         findings.append(f"a theme script that forgets the reader's choice: judged {sorted(planted_theme)}")
     if planted_finding != {"search", "graph-pick"}:
@@ -653,7 +687,7 @@ def controls(export, dist, chromium, jobs, got, ceiling=None):
           "text pages' ceiling; equation numbers pinned over their formulas; no report without the script; "
           "equations typeset from other text; equations out of order; macros the export does not have; a page too wide; the graph one node short; one "
           "label wrong; a search without its first result; the graph panel one link short; a theme script that forgets the "
-          "reader's choice)")
+          "reader's choice; a pale text colour; a colour with no dark value)")
 
 
 def main():

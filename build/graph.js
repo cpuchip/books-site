@@ -31,13 +31,15 @@
     problem_shape: "#b08478", exercise_set: "#e996c0", capability: "#c4c46a"
   };
   var colourOf = function (kind) { return COLOURS[kind] || "#999999"; };
-  // dark text on a light colour, white on a dark one (relative luminance, WCAG's formula)
+  // black or white text on a colour, whichever contrasts more (WCAG's relative luminance; the worst of COLOURS is
+  // law's purple at 4.93:1, where a fixed cut-off had given 4.44)
   var inkOn = function (hex) {
     var c = [1, 3, 5].map(function (i) {
       var v = parseInt(hex.slice(i, i + 2), 16) / 255;
       return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
     });
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.18 ? "#111111" : "#ffffff";
+    var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? "#ffffff" : "#000000";
   };
   var said = document.getElementById("graph-said");
   var words = function (s) { return String(s).replace(/_/g, " "); };

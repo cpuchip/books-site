@@ -627,6 +627,12 @@ of what the use selected in browser storage?"
   dark); and site.css's chosen-dark palette must equal its system-dark palette token for token. Control: a theme
   script that ignores storage. The search page now reports its overflow with its results and the check requires 0
   (a Planck formula in a snippet was 79px wider than a 390px phone; it now scrolls in its own box).
+- From primer's same change on its sites (#8722): every colour token of the light palette must have a dark value,
+  and each text token (fg, muted, accent, ok, warn) must reach 4.5:1 on the page and the code background in both
+  themes (measured: lowest 4.87, light muted on code background). Controls: a pale muted colour, a token with no
+  dark value. The graph panel's kind label now takes black or white ink, whichever contrasts more (law's purple
+  had 4.44:1 under a fixed cut-off; now 4.93). primer's other finding, that `color-scheme` makes Chromium's default
+  link colours pass in dark, does not reach books: every link here is set in --accent.
 
 ## Deploy
 
