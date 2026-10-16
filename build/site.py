@@ -33,13 +33,28 @@ TERM_GROUPS = [("concept", "Concepts"), ("theorem", "Theorems"), ("method", "Met
                ("quantity", "Quantities"), ("unit", "Units"), ("instrument", "Instruments"),
                ("experiment", "Experiments"), ("person", "People")]
 VERDICTS = {
-    "verified": "the printed answer passed a computed check",
-    "unverified": "no computed check settled this one (yet)",
+    "verified": "the printed answer was reproduced: by a computed check, or by a solve made without seeing it "
+                "and confirmed by a review",
+    "unverified": "nothing has reproduced the printed answer (yet)",
 }
+# every check verdict the export may carry, in a reader's words (meanings from the data owner's judge and review
+# scripts); a verdict not listed here refuses the build, so none reaches a page as a bare code
 CHECK_WORDS = {
     "PASS": "passes", "PASS-INTERPRETED": "passes, with the problem read into an equation",
+    "PASS-LOOSE": "passes, to within the last printed digit",
+    "PASS-ABS-CONVENTION": "passes, except for an absolute value the book leaves out (log x for log |x|)",
+    "PASS-ERRATUM": "passes once the book's own marked misprint is corrected",
+    "PASS-ALT-ERRATUM": "passes in the corrected form an erratum gives",
+    "PASS-REVIEWED": "solved without seeing the printed answer, and a review agrees with it",
+    "PRINTED-UPHELD": "the solve differed; a review found the solve's error and holds the printed answer",
+    "FLAG-PRINTED": "a review questions the printed answer (the errata say where a scan settled it)",
+    "FLAG-REVIEW-UNSURE": "a review could not tell whether the printed answer is right",
+    "UNREVIEWED": "solved, not yet reviewed",
     "FLAG-MISMATCH": "the printed answer does not match the problem",
     "FLAG-MISSING": "no printed answer to check", "FLAG-EXTRACTION": "the record may be misread",
+    "FLAG-PARSE": "the answer could not be read as a formula to check",
+    "FLAG-DOMAIN": "too few points inside the problem's domain to check",
+    "FLAG-INTERPRETED": "the check rests on a reading of the problem it could not confirm",
     "FLAG-TASK": "the check does not fit this problem", "UNJUDGED-OTHER": "not a kind the checker handles",
 }
 
@@ -159,6 +174,11 @@ def page_link(v, scans):
 
 
 def render_problem(p, scans=None):
+    for c in p.get("checks") or []:
+        if c.get("verdict") not in CHECK_WORDS:
+            refuse(f"{p['id']}: check verdict {c.get('verdict')!r} has no words for readers (CHECK_WORDS)")
+    if p.get("verdict") and p["verdict"] not in VERDICTS:
+        refuse(f"{p['id']}: verdict {p['verdict']!r} has no words for readers (VERDICTS)")
     answers = "".join(f"<li>{text(a, 'answer')}</li>" for a in p.get("answer_markdown") or []) or "<li>(none printed)</li>"
     checks = "".join(
         f"<li><code>{e(c['task'])}</code>: {e(CHECK_WORDS.get(c['verdict'], c['verdict']))}"
