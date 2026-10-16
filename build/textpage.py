@@ -28,6 +28,42 @@ ALIGN = re.compile(r"\s*text-align:\s*(left|center|right|justify)\s*;?\s*\Z")
 # a style of sizes only (width, height; one or more declarations): dropped
 WIDTH = re.compile(r"(?:\s*(?:width|height):\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*(?:;|\Z))+\s*\Z")
 SPAN = re.compile(r"[1-9][0-9]?\Z")
+# a book transcribed from a scan marks where each printed page starts (span.pagenum) and where each figure stands
+# (figure.scan-figure, or span.scan-figure inside a paragraph), as empty elements with data-page (and the
+# transcriber's data-description of the figure). The page writes them again as links to that page of the scan, in
+# a .scanmark element: furniture, whose words are not the book's (textpage.blocks and the oracle leave them out).
+MARKS = {"pagenum", "scan-figure"}
+MARK_ATTRS = {"data-page", "data-description", "data-continued"}
+
+
+def scanmark(tag, attrs, scans):
+    """(the element's opening tag and the words the site writes in it, reasons): a marker of text_html written
+    again, or reasons when it is not one (an unknown attribute, a page with no scan)."""
+    a = dict((k, v or "") for k, v in attrs)
+    cls = [c for c in a.get("class", "").split() if c in MARKS]
+    why = [f"attribute {k}= on a {cls[0]} marker" for k in a if k not in MARK_ATTRS | {"class"}]
+    page = a.get("data-page", "")
+    url = scans.get(page)
+    if not url:
+        why.append(f"a {cls[0]} marker for page {page!r}, which has no scan")
+        return "", why
+    href = html.escape(url, quote=True)
+    if cls[0] == "pagenum":
+        if tag != "span":
+            why.append(f"a pagenum marker on <{tag}>")
+        label = f"p. {html.escape(page)}" + (", continued" if a.get("data-continued") == "true" else "")
+        return f'<span class="scanmark pagenum"><a href="{href}">{label}</a>', why
+    # the description's formulas are $...$ (as excerpts' are), typeset by site.js in a .tx span
+    desc = html.escape(a.get("data-description", ""), quote=False)
+    desc = f'<span class="tx">{desc}</span>' if desc else ""
+    link = f'<a href="{href}">Figure on p. {html.escape(page)} of the scan</a>'
+    if tag == "figure":
+        return (f'<figure class="scanmark scan-figure">{link}'
+                + (f"<figcaption>Described by the transcriber: {desc}</figcaption>" if desc else ""), why)
+    if tag == "span":
+        return f'<span class="scanmark scan-figure">[{link}' + (f": {desc}]" if desc else "]"), why
+    why.append(f"a scan-figure marker on <{tag}>")
+    return "", why
 
 
 class _Parse(HTMLParser):
@@ -92,14 +128,15 @@ def links_of(text_html):
             for k, v in attrs if k == "href" and v and v.startswith("#")]
 
 
-def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset(), anchors=False):
+def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset(), anchors=False, scans=None):
     """(clean HTML, images used, reasons). Reasons non-empty means: no page.
 
     image_ok(path) says whether the export holds images/<book>/... at that path; resolve(target) is "self", an
     href to another page, or None (unlink); depth is how many ../ reach the site root from the page; targets are the
     ids other chapters of the book link to, kept here so those links land. anchors: give every top-level element
     that has no id of its own the id b-N (N its place among the top-level elements, from 1), so an excerpt or a search
-    result can link to its paragraph (docs/BLUEPRINT.md, "Finding things")."""
+    result can link to its paragraph (docs/BLUEPRINT.md, "Finding things"). scans: the book's page_scans, for its
+    page and figure markers (see scanmark); a marker in a book without them is a reason to reject."""
     p = _Parse()
     p.feed(text_html)
     p.close()
@@ -124,10 +161,32 @@ def sanitize(text_html, book, image_ok, resolve, depth, targets=frozenset(), anc
     out, images, open_a = [], [], []
     level, place = 0, 0  # open elements written so far; top-level elements seen
     up = "../" * depth
+    marking = []  # for each open element, whether it is a marker (whose own content, if any, is a reason to reject)
     for kind, tag, attrs in p.events:
         if kind == "data":
+            if any(marking):
+                if tag.strip():
+                    why.append("text inside a page or figure marker")
+                continue
             out.append(html.escape(tag, quote=False))
             continue
+        if kind == "start" and any(marking):
+            why.append(f"<{tag}> inside a page or figure marker")
+            continue
+        if kind == "start" and tag not in VOID and any(c in MARKS for k, v in attrs if k == "class"
+                                                       for c in (v or "").split()):
+            el, w = scanmark(tag, attrs, scans or {})
+            why.extend(w)
+            if level == 0:
+                place += 1
+            out.append(el)
+            marking.append(True)
+            level += 1
+            continue
+        if kind == "start" and tag not in VOID:
+            marking.append(False)
+        if kind == "end" and marking:
+            marking.pop()
         if kind == "end":
             if tag == "a":
                 if open_a.pop():
@@ -219,7 +278,7 @@ def blocks(clean):
     p = _Parse()
     p.feed(clean)
     p.close()
-    out, level, cur, in_math = [], 0, None, 0
+    out, level, cur, in_math, in_mark = [], 0, None, 0, 0  # a .scanmark's words are the site's, not the book's
     for kind, tag, attrs in p.events:
         if kind != "data" and cur is not None and tag in SEPARATE:
             cur[1].append(" ")
@@ -232,12 +291,18 @@ def blocks(clean):
                     out.append(cur)
             if in_math or (tag == "span" and "math" in (a.get("class") or "").split()):
                 in_math += 1 if tag not in VOID else 0
+            if in_mark or "scanmark" in (a.get("class") or "").split():
+                in_mark += 1 if tag not in VOID else 0
             if tag not in VOID:
                 level += 1
         elif kind == "end":
             level -= 1
             if in_math:
                 in_math -= 1
+            if in_mark:
+                in_mark -= 1
+        elif in_mark:
+            continue
         elif cur is not None and level > 0:
             cur[2].append(tag)
             if not in_math:

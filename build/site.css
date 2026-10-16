@@ -75,6 +75,14 @@ article.text td, article.text th { padding: .1rem .4rem; }
 article.text table, article.text table * { overflow-wrap: normal; word-break: normal; }
 article.text img { max-width: 100%; height: auto; }
 article.text figure { margin: 1rem 0; }
+/* a scan book's page starts and figures: links to that page of the scan, set apart from the book's own words */
+article.text .scanmark.pagenum { font-size: .8rem; color: var(--muted); font-family: system-ui, sans-serif;
+  margin: 0 .3em; white-space: nowrap; }
+article.text .scanmark.pagenum a { color: var(--accent); }
+article.text figure.scanmark { border: 1px dashed var(--rule); padding: .6rem .8rem; font-family: system-ui, sans-serif;
+  font-size: .9rem; }
+article.text figure.scanmark figcaption, article.text span.scanmark.scan-figure { color: var(--muted); }
+article.text span.scanmark.scan-figure a { color: var(--accent); }
 article.text .smallcaps { font-variant: small-caps; }
 article.text .center, article.text .ta-center { text-align: center; }
 article.text .ta-left { text-align: left; }

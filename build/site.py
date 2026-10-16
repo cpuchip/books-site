@@ -598,7 +598,8 @@ def text_pages(d, image_ok):
                 if len(other) == 1 and next(iter(other)) in pages:
                     return f"../../{chapter_slug(b, next(iter(other)))}/text/index.html#{textpage.ID_PREFIX}{t}"
                 return None
-            html_, imgs, why = textpage.sanitize(c["text_html"], b, image_ok, resolve, 5, targets, anchors=True)
+            html_, imgs, why = textpage.sanitize(c["text_html"], b, image_ok, resolve, 5, targets, anchors=True,
+                                                 scans=scans_of(d))
             out[c["id"]] = "; ".join(why) if why else None
             if not why:
                 clean[c["id"]] = html_

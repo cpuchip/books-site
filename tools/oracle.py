@@ -92,14 +92,18 @@ TEXT_TAGS = {"a", "blockquote", "br", "caption", "div", "em", "figcaption", "fig
              "hr", "img", "li", "ol", "p", "section", "span", "strong", "sup", "table", "tbody", "td", "th", "thead",
              "tr", "ul"}
 TEXT_IN_ATTRS = {"id", "class", "style", "colspan", "rowspan", "src", "alt", "href", "role", "data-label",
-                 "data-latex-placement", "value"}
+                 "data-latex-placement", "value",
+                 # a scan book's page and figure markers (span.pagenum, figure/span.scan-figure); scan_marks_check
+                 "data-page", "data-description", "data-continued"}
 TEXT_STYLE = re.compile(r"\s*text-align:\s*(?:left|center|right|justify)\s*;?\s*\Z"
                         r"|(?:\s*(?:width|height):\s*\d+(?:\.\d+)?(?:%|in|cm|mm|em|px|pt)\s*(?:;|\Z))+\s*\Z")
 # what a text page's article may carry, once written again: these attributes; classes from this list (or ta-*, the
 # alignment); every id and fragment with the c- prefix, so no book id can be one the page itself uses
 TEXT_OUT_ATTRS = {"id", "class", "href", "src", "alt", "colspan", "rowspan", "value"}
 TEXT_OUT_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnotes", "footnote-ref", "footnote-back",
-                    "ta-left", "ta-center", "ta-right", "ta-justify", "tex", "rule-t", "rule-b", "rule-l", "rule-r"}
+                    "ta-left", "ta-center", "ta-right", "ta-justify", "tex", "rule-t", "rule-b", "rule-l", "rule-r",
+                    "scanmark", "pagenum", "scan-figure", "tx"}  # tx: a figure description's $...$, typeset
+SCAN_HREF = re.compile(r"https://archive\.org/download/[A-Za-z0-9_.-]+/page/n[0-9]+\.jpg\Z")
 TEXT_PAGE = re.compile(r"books/([^/]+)/ch/([^/]+)/text/index\.html\Z")
 WITHHELD = {"errata": "its book's errata do not yet say which chapter each is in",
             "macros": "its book's macros name the transcription's source"}
@@ -434,7 +438,10 @@ class _Units(HTMLParser):
         if tag not in VOID:
             self.stack.append({"tag": tag, "unit": unit, "anchor": anchor, "first_of": first_of, "count": count,
                                "group": group, "class": a.get("class"), "data_group": a.get("data-group"),
-                               "heading": heading, "script": tag == "script", "field": fld})
+                               "heading": heading, "script": tag == "script", "field": fld,
+                               # a .scanmark (a scan book's page or figure link) is the site's words, not the book's:
+                               # left out of units and fields, and proven by scan_marks_check instead
+                               "mark": "scanmark" in (a.get("class") or "").split() or bool(parent and parent["mark"])})
 
     def handle_endtag(self, tag):
         if tag == "html":
@@ -450,6 +457,8 @@ class _Units(HTMLParser):
     def handle_data(self, data):
         if self.stack and self.stack[-1]["script"] and data.strip():
             self.bad.append("text inside <script>")
+        if self.stack and self.stack[-1]["mark"]:
+            return
         top = self.stack[-1] if self.stack else None
         if top is not None and top["unit"] is not None and top["unit"]["first"] is None and data.strip():
             top["unit"]["before"] = True
@@ -516,7 +525,7 @@ class _TextOut(HTMLParser):
                 self.bad.append(f"class {v[:40]!r} in a chapter's text")
             elif k == "id" and not (v.startswith("c-") or re.fullmatch(r"b-[1-9][0-9]*", v)):
                 self.bad.append(f"id {v[:40]!r} in a chapter's text, not c- or b-N")
-            elif k == "href" and not (re.fullmatch(r"#c-[^\s\\\"<>]+", v)
+            elif k == "href" and not (re.fullmatch(r"#c-[^\s\\\"<>]+", v) or SCAN_HREF.match(v)
                                       or re.fullmatch(r"\.\./\.\./[a-z0-9-]+/text/index\.html#c-[^\s\\\"<>]+", v)):
                 self.bad.append(f"a link that leaves the book's text pages: {v[:40]!r}")
             elif k == "src":
@@ -568,7 +577,7 @@ class _Blocks(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.depth, self.math, self.out = 0, 0, []
+        self.depth, self.math, self.mark, self.out = 0, 0, 0, []  # a .scanmark's words are the site's, left out
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -585,19 +594,23 @@ class _Blocks(HTMLParser):
             self.depth += 1
             if self.math or (tag == "span" and "math" in (a.get("class") or "").split()):
                 self.math += 1
+            if self.mark or "scanmark" in (a.get("class") or "").split():
+                self.mark += 1
 
     def handle_endtag(self, tag):
         if self.depth > 1 and tag not in VOID:
             self.depth -= 1
             if self.math:
                 self.math -= 1
+            if self.mark:
+                self.mark -= 1
             if self.out and tag in PARTS_WORDS:
                 self.out[-1][1].append(" ")
         elif self.depth == 1 and tag == "article":
             self.depth = 0
 
     def handle_data(self, data):
-        if self.depth > 1 and self.out and not self.math:
+        if self.depth > 1 and self.out and not self.math and not self.mark:
             self.out[-1][1].append(data)
 
 
@@ -680,6 +693,109 @@ def excerpt_links_check(dist, export):
     return bad
 
 
+class _MarksIn(HTMLParser):
+    """A chapter's text_html as its page and figure markers, in order: (tag, kind, page, description, continued)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out = []
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: v or "" for k, v in attrs}
+        kind = [c for c in a.get("class", "").split() if c in ("pagenum", "scan-figure")]
+        if kind:
+            self.out.append((tag, kind[0], a.get("data-page", ""), a.get("data-description", ""),
+                             a.get("data-continued") == "true"))
+
+
+class _MarksOut(HTMLParser):
+    """A text page's article as its .scanmark elements, in order: [tag, kind, [hrefs], link text, caption, all text]."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.depth, self.out, self.cur, self.stack = 0, [], None, []
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: v or "" for k, v in attrs}
+        if tag == "article" and a.get("data-kind") == "text":
+            self.depth = 1
+            return
+        if not self.depth or tag in VOID:
+            return
+        cls = a.get("class", "").split()
+        if self.cur is None and "scanmark" in cls:
+            kind = [c for c in cls if c in ("pagenum", "scan-figure")]
+            self.cur = [tag, kind[0] if kind else "", [], [], [], []]
+            self.out.append(self.cur)
+            self.stack = []
+        elif self.cur is not None:
+            self.stack.append(tag)
+            if tag == "a":
+                self.cur[2].append(a.get("href", ""))
+
+    def handle_endtag(self, tag):
+        if self.cur is None:
+            return
+        if self.stack:
+            self.stack.pop()
+        else:
+            self.cur = None
+
+    def handle_data(self, data):
+        if self.cur is None:
+            return
+        self.cur[5].append(data)
+        if "a" in self.stack:
+            self.cur[3].append(data)
+        if "figcaption" in self.stack:
+            self.cur[4].append(data)
+
+
+def scan_marks_check(dist, export):
+    """{page: [findings]}: on each text page of a book transcribed from a scan, the .scanmark elements are its
+    text_html's page and figure markers, one for one and in order: a page start reads "p. N" (", continued" when it
+    says so) and links to page_scans[N]; a figure links "Figure on p. N of the scan" to it, with the transcriber's
+    description after (a figcaption "Described by the transcriber: ..." on a figure, ": ..." inside brackets on a
+    span). Their words are left out of the text comparison, so this is what proves them."""
+    bad = defaultdict(list)
+    index = json.loads((Path(export) / "books.json").read_text(encoding="utf-8"))
+    scans = {b["id"]: (b.get("transcription") or {}).get("page_scans") or {} for b in index["books"]}
+    for f in sorted((Path(export) / "books").glob("*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        bid = d["book"]["id"]
+        for c in d["chapters"]:
+            page = Path(dist) / f"books/{bid}/ch/{c['id'][len(bid) + 1:]}/text/index.html"
+            if not page.is_file():
+                continue
+            rel = page.relative_to(dist).as_posix()
+            want = _MarksIn()
+            want.feed(c.get("text_html") or "")
+            want.close()
+            got = _MarksOut()
+            got.feed(page.read_text(encoding="utf-8"))
+            got.close()
+            if len(want.out) != len(got.out):
+                bad[rel].append(f"{len(got.out)} page and figure links, its text_html has {len(want.out)} markers")
+            for n, (w, g) in enumerate(zip(want.out, got.out)):
+                tag, kind, pg, desc, cont = w
+                url = scans.get(bid, {}).get(pg)
+                link = norm("".join(g[3]))
+                if kind == "pagenum":
+                    text = f"p. {pg}" + (", continued" if cont else "")
+                    ok = g[1] == kind and g[0] == "span" and g[2] == [url] and link == text and norm("".join(g[5])) == text
+                else:
+                    text = f"Figure on p. {pg} of the scan"
+                    full = (f"{text}Described by the transcriber: {norm(desc)}" if desc else text) if tag == "figure" \
+                        else (f"[{text}: {norm(desc)}]" if desc else f"[{text}]")
+                    ok = (g[1] == kind and g[0] == tag and g[2] == [url] and link == text
+                          and norm("".join(g[5])) == norm(full)
+                          and (tag != "figure" or not desc or norm("".join(g[4])) == norm(f"Described by the transcriber: {desc}")))
+                if not url or not ok:
+                    bad[rel].append(f"marker {n + 1} ({kind}, p. {pg}) is shown as <{g[0]}> {g[1]!r} linking "
+                                    f"{g[2]} with {norm(''.join(g[5]))[:60]!r}")
+    return bad
+
+
 def scan_links_check(dist, export):
     """{page: [findings]}: every excerpt and problem with a page shows its page label once, in its first line; in a
     book transcribed from a scan (books.json transcription.page_scans) the label is a link (a.pg) to exactly that
@@ -731,6 +847,8 @@ def site_units(dist, export=None):
         for rel, found in scan_links_check(dist, export).items():
             pages[rel].extend(found)
         for rel, found in hold_names_check(export).items():
+            pages[rel].extend(found)
+        for rel, found in scan_marks_check(dist, export).items():
             pages[rel].extend(found)
     for css in sorted(dist.rglob("*.css")):
         if css.relative_to(dist).parts[0] == "vendor":
@@ -1498,6 +1616,29 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ]
     else:
         print("controls on scan links: NOT RUN, no page links two scans, or none has a plain page label")
+    # a text page's page and figure links (a scan book's markers): one pointed at another page's scan, a figure
+    # dropped, a description changed; each alone must go red
+    marked = []
+    for page in sorted(Path(dist).glob("books/*/ch/*/text/index.html")):
+        raw = page.read_text(encoding="utf-8")
+        pn = re.findall(r'<span class="scanmark pagenum"><a href="([^"]+)">', raw)
+        fg = re.findall(r'<figure class="scanmark scan-figure">.*?</figure>', raw, re.S)
+        if len(set(pn)) > 1 and fg and "<figcaption>Described by the transcriber: " in fg[0]:
+            marked.append((page.relative_to(dist).as_posix(), pn, fg[0]))
+    if marked:
+        mp, pn, fig = rng.choice(marked)
+        other = next(h for h in pn if h != pn[0])
+        site_plants += [
+            ("point a page start at another page's scan",
+             lambda c: plant_text(c, mp, f'<span class="scanmark pagenum"><a href="{pn[0]}">',
+                                  f'<span class="scanmark pagenum"><a href="{other}">'), {("page", mp, "markup")}),
+            ("drop a figure's link to the scan", lambda c: plant_text(c, mp, fig, ""), {("page", mp, "markup")}),
+            ("change a word of a figure's description",
+             lambda c: plant_text(c, mp, "<figcaption>Described by the transcriber: ",
+                                  "<figcaption>Described by the transcriber: planted "), {("page", mp, "markup")}),
+        ]
+    else:
+        print("controls on page and figure links: NOT RUN, no text page has two page starts and a described figure")
     # the hold file's names: a released book renamed by one character must be seen (the site refuses it too)
     hold = json.loads(HOLD.read_text(encoding="utf-8"))
     if hold.get("released"):

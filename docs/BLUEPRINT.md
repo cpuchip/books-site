@@ -660,6 +660,20 @@ edition). It arrived at pd-books 43ada35 and showed three things the site had as
   (a label pointed at another page, a linked label made plain, a link given to a plain label). Checked on the real
   path: printed pages 25, 33, 128, 301 and 463 open on the page they name.
 
+**Page starts and figures in the text** (pd-books 1348b6d). The data owner marks, in a scan book's `text_html`
+only, where each printed page starts (`<span class="pagenum" data-page="N">`, `data-continued="true"` where a
+chapter opens partway down a page) and where each figure stands (`<figure class="scan-figure" data-page="N"
+data-description="...">`, or a span inside a paragraph), as empty elements; the transcription has no figure images.
+`textpage.scanmark()` writes each again as a `.scanmark`: a page start is a small "p. N" link to that page's scan,
+a figure is "Figure on p. N of the scan" linked the same way, with the transcriber's description beside it, said
+to be the transcriber's. A marker with any content, an unknown attribute, or a page with no scan is a reason to
+withhold the chapter. A scanmark's words are the site's, not the book's: the build's `blocks()` and the oracle's
+unit, field and block readers all leave them out, so the text comparison stays the book's words exactly, and
+`scan_marks_check` proves the scanmarks themselves: one for each marker, in order, its tag, its words and exactly
+`page_scans[N]`, with three controls (a page start pointed at another page, a figure dropped, a description word
+changed). Measured at 1348b6d with Granville released in a scratch copy: 462 page starts and 278 figures, all
+matched, each control red.
+
 Found on the way: the emphasis parser counted a formula beside a star as a letter, where CommonMark counts its `$`
 as punctuation, so "*...function.*$^{*}$" stayed as stars. It now follows CommonMark; on the 15 other books the
 change alters no page. Three Granville excerpts still show a star that is the book's own footnote mark (asked of the
