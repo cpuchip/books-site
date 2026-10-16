@@ -400,7 +400,7 @@ screenshots. Every book but one loses something the page would claim to show "in
 tables (Ball, De Morgan), footnotes inside math (Hardy, Maxwell, Macfarlane), doubled dates (Whitehead). The
 pages match the export's `text_html` exactly, so the losses are the conversion's, sent to the data owner whole.
 So `build/text-hold.json` lists the books whose text pages are held, each with the reason its chapter pages
-give readers; the build withholds them and the oracle, reading the same file, requires exactly that reason.
+give readers (and, since 2026-10-16, the books a read released: see "A book transcribed from a scan"); the build withholds them and the oracle, reading the same file, requires exactly that reason.
 Todhunter alone is released (its one results table shows as source). Two findings were the site's and are
 fixed: table cells broke inside numbers on a phone (3487 read as "348 / 7"), and the page's line promised links
 between chapters that few books have.
@@ -633,6 +633,37 @@ of what the use selected in browser storage?"
   dark value. The graph panel's kind label now takes black or white ink, whichever contrasts more (law's purple
   had 4.44:1 under a fixed cut-off; now 4.93). primer's other finding, that `color-scheme` makes Chromium's default
   link colours pass in dark, does not reach books: every link here is set in --accent.
+
+## A book transcribed from a scan: Granville (2026-10-16; written after the build, and said so here)
+
+Granville's *Elements of the Differential and Integral Calculus* (1911) is the first pd-books book whose text is not
+Project Gutenberg's: pd-books transcribed the Cornell scan `cu31924003686221` itself, and `books.json` carries
+`transcription.page_scans`, each printed page's scan image (six pages, 3-4 and 33-36, from a second scan of the same
+edition). It arrived at pd-books 43ada35 and showed three things the site had assumed.
+
+- **Release, not hold, is what publishes text.** The site held a book's text only when `build/text-hold.json` named
+  it, so Granville's 18 chapters with `text_html` went out unread on the first build. Now a book's text is published
+  only when the file lists it under `released` (the five books a read released: Todhunter on three chapters, the other four on all of theirs); any other book is withheld
+  with the `unread` reason until a read releases it. Build and oracle read the same rule.
+- **A name on the hold file that is no book refuses the build** (a typo or a renamed id would otherwise withhold a
+  released book as unread, and the oracle, reading the same file, would agree); the oracle reports it too.
+- **Provenance without a licence to quote.** A Gutenberg book's page quotes its transcription's licence. A scan
+  transcription has none, so `text_provenance()` says what the printed book is and that the transcription is
+  pd-books' own (CC0), names any pages read from another scan (computed from `page_scans`), and refuses unless the
+  book was published more than 95 years before the build (the United States public-domain line). It claims no more
+  than the data holds: no place of publication, nothing about the other scan beyond its name and pages. The About
+  page names the books transcribed this way.
+- **Page labels link to the scan.** In a book with `page_scans`, every excerpt's and problem's page label is a link
+  (`a.pg`) to that page's image in its archive, which is where its words were read; elsewhere it stays plain
+  (`span.pg`, problems now carry it too). The scans are linked, never copied. The oracle's `scan_links_check`
+  requires exactly `page_scans[page]` on every label of such a book and no link in any other, with three controls
+  (a label pointed at another page, a linked label made plain, a link given to a plain label). Checked on the real
+  path: printed pages 25, 33, 128, 301 and 463 open on the page they name.
+
+Found on the way: the emphasis parser counted a formula beside a star as a letter, where CommonMark counts its `$`
+as punctuation, so "*...function.*$^{*}$" stayed as stars. It now follows CommonMark; on the 15 other books the
+change alters no page. Three Granville excerpts still show a star that is the book's own footnote mark (asked of the
+export); `build/excerpt-ceiling.json` allows those three and no more.
 
 ## Deploy
 

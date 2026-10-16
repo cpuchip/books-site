@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -143,7 +144,21 @@ def scan_links(evidence):
     return out
 
 
-def render_problem(p):
+def scans_of(d):
+    """{printed page: the scan page's image URL} for a book transcribed from a scan (books.json transcription.page_scans),
+    else {}. The site links each page label to it; the scan stays in its archive."""
+    return (d["book"].get("transcription") or {}).get("page_scans") or {}
+
+
+def page_link(v, scans):
+    """The page label for v, a link to that page's scan when the book has one (a.pg), else plain (span.pg)."""
+    url = (scans or {}).get(str(v))
+    if url:
+        return f'<a class="pg" href="{e(url)}" title="This page in the scan of the printed book">{e(page_label(v))}</a>'
+    return f'<span class="pg">{e(page_label(v))}</span>'
+
+
+def render_problem(p, scans=None):
     answers = "".join(f"<li>{text(a, 'answer')}</li>" for a in p.get("answer_markdown") or []) or "<li>(none printed)</li>"
     checks = "".join(
         f"<li><code>{e(c['task'])}</code>: {e(CHECK_WORDS.get(c['verdict'], c['verdict']))}"
@@ -159,7 +174,7 @@ def render_problem(p):
                  f'<code>{e(str(pins.get("firmware", ""))[:7])}</code>.</p></div>')
     verdict = p.get("verdict") or ""
     return (f'<li class="problem" data-kind="problem" data-id="{e(p["id"])}" id="p-{e(p["id"].split("/", 1)[-1].replace("/", "-"))}">'
-            f'<p class="loc">{e(p.get("location") or "")}{", p. " + e(str(p["page"])) if p.get("page") else ""}</p>'
+            f'<p class="loc">{e(p.get("location") or "")}{", " + page_link(p["page"], scans) if p.get("page") else ""}</p>'
             + (f'<p>{text(p.get("markdown"), "text")}</p>' if (p.get("markdown") or "").strip()
                else '<p class="n">The record holds no text for this problem.</p>')
             + f'<div class="ans"><span>Printed answer:</span><ul>{answers}</ul></div>'
@@ -286,6 +301,59 @@ with the chapters that teach it and the other books on the shelf that teach it t
     return page(f"Index of terms: {b['title']}", body, 3, f"The terms taught in {b['title']}, by chapter")
 
 
+def spans(pages):
+    """Printed page numbers as ranges: ["3", "4", "33", "34", "35", "36"] is "3-4 and 33-36"; a page that is not a
+    number is listed as it is."""
+    nums = sorted(int(p) for p in pages if str(p).isdigit())
+    rest = sorted(str(p) for p in pages if not str(p).isdigit())
+    out, i = [], 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        out.append(str(nums[i]) if i == j else f"{nums[i]}-{nums[j]}")
+        i = j + 1
+    out += rest
+    return out[0] if len(out) == 1 else ", ".join(out[:-1]) + " and " + out[-1]
+
+
+def text_provenance(b, t):
+    """Where the book's text came from and under what terms. A transcription someone published (Project Gutenberg)
+    is quoted with its own licence; a book pd-books transcribed from a scan itself has no licence to quote, so the
+    page says what the printed book is and that the transcription is pd-books' own (CC0). The second claim rests on
+    the year: a book is said to be public domain in the United States only if it was published more than 95 years
+    before this build, else the build refuses."""
+    if t.get("licence_terms"):
+        return (f"""<p>Text: <a href="{e(t.get('url', ''))}">{e(t.get('source', ''))}</a>, released {e(t.get('released', ''))}.
+The transcription's licence, as it states it:</p>
+<blockquote>{e(t['licence_terms'])}</blockquote>""")
+    if not t.get("page_scans") or not t.get("url"):
+        refuse(f"{b['id']}: its transcription quotes no licence and is not a transcription of a linked scan")
+    year = b.get("year")
+    if not isinstance(year, int) or year + 95 >= datetime.now(timezone.utc).year:
+        refuse(f"{b['id']}: published {year!r}, so the site cannot say it is in the public domain in the United States")
+    how = (t.get("how") or "").strip().rstrip(".")
+    # pages read from another copy than the one named (a leaf missing or unreadable there), said by the page map itself
+    main = t["url"].rstrip("/").rsplit("/", 1)[-1]
+    other = {}
+    for pg, url in t["page_scans"].items():
+        m = re.match(r"https://archive\.org/download/([^/]+)/", url)
+        if not m:
+            refuse(f"{b['id']}: page {pg}'s scan {url} is not an Internet Archive page image")
+        if m.group(1) != main:
+            other.setdefault(m.group(1), []).append(pg)
+    elsewhere = "".join(
+        f' {"Page" if len(pgs) == 1 else "Pages"} {e(spans(pgs))} {"is" if len(pgs) == 1 else "are"} read from another'
+        f' scan, <a href="https://archive.org/details/{e(ident)}">{e(ident)}</a>.'
+        for ident, pgs in sorted(other.items()))
+    # the export's source speaks as pd-books ("our transcription of ..."); on this site "our" would read as the site's
+    source = re.sub(r"^our ", "pd-books' ", t.get("source") or t["url"])
+    return (f"""<p>Text: <a href="{e(t['url'])}">{e(source)}</a>.{' How: ' + e(how) + '.' if how else ''}</p>
+<p>The printed book ({e(b.get('edition') or str(year))}) was published in {year}, more than 95 years ago, and is in
+the public domain in the United States. The transcription is pd-books' own, dedicated to the public domain (CC0)
+with the rest of pd-books. Each page label on the book's chapter pages links to that page in the scan.{elsewhere}</p>""")
+
+
 def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     b = d["book"]
     bid = b["id"]
@@ -300,11 +368,12 @@ def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     listed_x = {i for c in d["chapters"] for i in c["excerpts"]}
     listed_q = {i for c in d["chapters"] for i in c["equations"]}
     listed_s = {i for c in d["chapters"] for i in c["exercise_sets"]}
-    loose = ("".join(render_excerpt(x) for x in d["excerpts"] if x["id"] not in listed_x)
+    scans = scans_of(d)
+    loose = ("".join(render_excerpt(x, scans=scans) for x in d["excerpts"] if x["id"] not in listed_x)
              + "".join(render_equation(x) for x in d["equations"] if x["id"] not in listed_q)
-             + "".join(render_problem(p) for p in d["problems"]
+             + "".join(render_problem(p, scans) for p in d["problems"]
                        if p.get("set") not in listed_s and p.get("set") not in {x["id"] for x in d["exercise_sets"]}))
-    loose_sets = "".join(render_set(x, [p for p in d["problems"] if p.get("set") == x["id"]])
+    loose_sets = "".join(render_set(x, [p for p in d["problems"] if p.get("set") == x["id"]], scans)
                          for x in d["exercise_sets"] if x["id"] not in listed_s)
     # raw.githubusercontent, not a /blob/ page: GitHub's blob view 503s/429s unauthenticated checkers
     # (measured from the build box 2026-10-10, every repo), so the link check could never confirm a blob link.
@@ -312,9 +381,7 @@ def render_book(d, index_entry, pin, generated, related="", n_terms=0):
     body = f"""<h1>{e(b['title'])}</h1>
 <p class="by">{e(", ".join(b.get("authors") or []))}, {e(str(b.get("year", "")))}. {e(b.get("edition") or "")}</p>
 <section class="prov" id="provenance"><h2>Provenance and licence</h2>
-<p>Text: <a href="{e(t.get('url', ''))}">{e(t.get('source', ''))}</a>, released {e(t.get('released', ''))}.
-The transcription's licence, as it states it:</p>
-<blockquote>{e(t.get('licence_terms', ''))}</blockquote>
+{text_provenance(b, t)}
 <p>This site quotes excerpts and problems from that transcription and hosts no scans; scans are linked to
 their archive. The records below (problems, checks, errata) are from <a href="{e(data_url)}">pd-books at
 {e(pin[:7])}</a>, dedicated to the public domain (CC0), export generated {e(generated)}.</p></section>
@@ -337,7 +404,8 @@ def emphasis(s):
     """Export markdown as text (its LaTeX kept for KaTeX), with its *emphasis* and **strong** rendered by CommonMark's
     rule for star runs: a run that can open (left-flanking) and a later one that can close (right-flanking) pair up,
     nearest first, two stars where both have two, so nesting (*a (*i.e.*) b*) and a star inside a word (1*b*) work.
-    A formula is set aside first: a star in it is not a marker, and an emphasis that holds one still closes. A star
+    A formula is set aside first: a star in it is not a marker, and an emphasis that holds one still closes. Beside a
+    star the formula counts as punctuation, as its $ does in CommonMark, so "*... function.*$^{*}$" closes. A star
     that pairs with nothing stays a star."""
     held = []
 
@@ -347,7 +415,7 @@ def emphasis(s):
     s = MATH_SPAN.sub(hold, s or "")
     parts = re.split(r"(\*+)", s)
     space = lambda c: c == "" or c.isspace()
-    punct = lambda c: c != "" and not c.isalnum() and not c.isspace() and c != "\x00"
+    punct = lambda c: c != "" and not c.isalnum() and not c.isspace()  # the \x00 of a formula is punctuation too
     runs = []  # [part index, stars left, can open, can close, open tags, close tags, stars in the run]
     for i in range(1, len(parts), 2):
         before = parts[i - 1][-1:] if parts[i - 1] else (parts[i - 2][-1:] if i >= 2 else "")
@@ -420,8 +488,8 @@ def page_label(v):
     return f"scan page {m.group(1)}" if m else v
 
 
-def render_excerpt(x, where=None):
-    page_no = f'<span class="pg">{e(page_label(x.get("page")))}</span>' if x.get("page") else ""
+def render_excerpt(x, where=None, scans=None):
+    page_no = page_link(x["page"], scans) if x.get("page") else ""
     link = ("" if where is None else
             f' <a class="intext" href="text/index.html{"#" + e(where) if where else ""}">In the text</a>')
     return (f'<li class="excerpt" data-kind="excerpt" data-id="{e(x["id"])}" id="{e(anchor(x["id"]))}"><p class="loc">{e(x.get("location") or "")}'
@@ -450,8 +518,8 @@ def elsewhere(d, x, what):
     return f'<li class="{what} ref"><a href="{href}">This {what} is in {e(name)}</a> ({e(x.get("location") or "")})</li>'
 
 
-def render_set(s, problems):
-    items = "".join(render_problem(p) for p in problems)
+def render_set(s, problems, scans=None):
+    items = "".join(render_problem(p, scans) for p in problems)
     label = e(str(s.get("set")))
     return (f'<section class="set" data-kind="exercise_set" data-id="{e(s["id"])}" id="set-{label}">'
             f'<h3>Exercise {label}</h3>'
@@ -499,7 +567,10 @@ def text_pages(d, image_ok):
     chs = [c for c in d["chapters"] if c.get("text_html")]
     state = {}
     # a book the review held back (build/text-hold.json): its reason, as readers will read it
-    held = (json.loads((HERE / "text-hold.json").read_text(encoding="utf-8")).get("books") or {}).get(b)
+    hold = json.loads((HERE / "text-hold.json").read_text(encoding="utf-8"))
+    held = (hold.get("books") or {}).get(b)
+    if not held and b not in (hold.get("released") or []):
+        held = hold["unread"]  # a book no read has released yet: withheld, never published by default
     if held:
         return {c["id"]: held for c in chs}, {}, []
     # an erratum with no chapter is one the text never shows (an answer at the back): printed_in_text false says so
@@ -547,12 +618,12 @@ def render_chapter(d, c, text_state=None, chapter_blocks=None):
         probs.setdefault(p.get("set"), []).append(p)
     sections = ""
     for sid in c["exercise_sets"]:
-        sections += render_set(sets.get(sid, {"id": sid, "set": sid}), probs.get(sid, []))
+        sections += render_set(sets.get(sid, {"id": sid, "set": sid}), probs.get(sid, []), scans_of(d))
     b = d["book"]
     body = f"""<p class="crumb"><a href="../../index.html">{e(b['title'])}</a></p>
 <h1>{e(c.get('title') or c.get('number') or '')}</h1>
 {text_line(c, text_state or {})}
-<section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i], locate(by_id_x[i], chapter_blocks)) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
+<section><h2>Excerpts</h2><ul class="excerpts">{''.join((render_excerpt(by_id_x[i], locate(by_id_x[i], chapter_blocks), scans_of(d)) if by_id_x[i].get("chapter") == c["id"] else elsewhere(d, by_id_x[i], "excerpt")) for i in c['excerpts'] if i in by_id_x)}</ul></section>
 <section><h2>Equations</h2><ul class="equations">{''.join((render_equation(by_id_q[i]) if by_id_q[i].get("chapter") == c["id"] else elsewhere(d, by_id_q[i], "equation")) for i in c['equations'] if i in by_id_q)}</ul></section>
 <section><h2>Problems</h2>{sections or '<p>No exercises in this chapter.</p>'}</section>"""
     return page(f"{c.get('title') or c.get('number') or 'Chapter'}: {b['title']}", body, 4, math=b.get("macros") or {})
@@ -667,18 +738,25 @@ word's first letter), and the server keeps no log of what it serves.</p>
                 scripts=["vendor/katex/katex.min.js", "search/search.js"], styles=["vendor/katex/katex.min.css"])
 
 
-def render_about(pin, sa_pin=None):
+def render_about(pin, sa_pin=None, scanned=()):
     sa = (f"""
 <p>The share-alike books are built from <a href="{sapage.SA_BOOKS}">sa-books</a> at <code>{e(sa_pin[:7])}</code>:
 newer books whose authors released them under a Creative Commons Attribution-ShareAlike licence. Each of their
 pages carries its credits and stays under its book's licence, and a build that loses a page, a word, a formula or
 a figure of them does not publish.</p>""" if sa_pin else "")
+    titles = [f"<cite>{e(x)}</cite>" for x in scanned]
+    named = titles[0] if len(titles) == 1 else ", ".join(titles[:-1]) + " and " + titles[-1] if titles else ""
+    own = ("" if not scanned else
+           f" pd-books transcribed {named} itself from {'a scan' if len(titles) == 1 else 'scans'} of the printed"
+           f" {'book' if len(titles) == 1 else 'books'}; {'that transcription is' if len(titles) == 1 else 'those are'}"
+           f" dedicated to the public domain (CC0), and each page label on {'its' if len(titles) == 1 else 'their'}"
+           f" pages links to that page of the scan.")
     body = f"""<h1>About</h1>
 <p>The public-domain books are built from <a href="{PD_BOOKS}">pd-books</a> at <code>{e(pin[:7])}</code>. A build that
 loses a book, a problem or an erratum from that data does not publish. Corrections are welcome in pd-books.</p>
-<p>Those books are in the public domain in the United States. Their transcriptions come from
+<p>Those books are in the public domain in the United States. {"Most of their" if scanned else "Their"} transcriptions come from
 <a href="https://www.gutenberg.org/">Project Gutenberg</a>, whose licence each book page quotes, with a link to the
-book's own page there. Scans of the printed books are linked to the archive that holds them,
+book's own page there.{own} Scans of the printed books are linked to the archive that holds them,
 not copied here.</p>{sa}"""
     return page("About", body, 1)
 
@@ -708,6 +786,11 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
             refuse(f"sa-books page {p} would overwrite a pd-books page")
     generated = (index.get("generated_from") or {}).get("generated_at", "")
     entries = {b["id"]: b for b in index["books"]}
+    # a name on the hold file that is no book (a typo, a renamed id) would silently withhold a released book as unread
+    hold = json.loads((HERE / "text-hold.json").read_text(encoding="utf-8"))
+    for name in list(hold.get("released") or []) + list(hold.get("books") or {}):
+        if name not in entries:
+            refuse(f"build/text-hold.json names {name}, which is not a book in the export")
     with tempfile.TemporaryDirectory(dir=Path(out).parent if Path(out).parent.exists() else None) as tmp:
         dist = Path(tmp) / "dist"
         dist.mkdir()
@@ -724,7 +807,8 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
         for rel, src in sa_figs.items():
             (dist / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(src, dist / rel)
-        w("about/index.html", render_about(pin, sa_pin if sa_root else None))
+        scanned = [b["title"] for b in index["books"] if (b.get("transcription") or {}).get("page_scans")]
+        w("about/index.html", render_about(pin, sa_pin if sa_root else None, scanned))
         all_terms = terms_of(graph, books)
         check_relations(index.get("relations") or [], entries)
         names = {n["id"]: n.get("name") or "" for n in graph["nodes"]}

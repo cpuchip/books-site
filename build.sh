@@ -9,7 +9,7 @@
 #                                        rehearsal before any deploy sets it, and a build without it says so
 #
 # Order: pd-books' own export check (inside site.py) -> build into a staging dir -> the oracle with its
-# planted controls (38 and two refusals, docs/BLUEPRINT.md) -> the share-alike books' oracle (8 controls) -> links -> outward -> graph -> the search index (4 controls) -> vendored libraries -> the browser (with
+# planted controls (58 at pd-books 43ada35, docs/BLUEPRINT.md) -> the share-alike books' oracle (8 controls) -> links -> outward -> graph -> the search index (4 controls) -> vendored libraries -> the browser (with
 # CHROMIUM). OUT is replaced only when every check that ran is green.
 set -eu
 cd "$(dirname "$0")"

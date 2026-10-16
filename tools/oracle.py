@@ -164,7 +164,18 @@ HOLD = Path(__file__).resolve().parent.parent / "build" / "text-hold.json"
 
 
 def held_reasons():
-    return set((json.loads(HOLD.read_text(encoding="utf-8")).get("books") or {}).values())
+    hold = json.loads(HOLD.read_text(encoding="utf-8"))
+    return set((hold.get("books") or {}).values()) | {hold["unread"]}
+
+
+def hold_names_check(export, hold=None):
+    """{"build/text-hold.json": [findings]}: every book the hold file names (released or held) is a book of the export;
+    a name that is none (a typo, a renamed id) would withhold a released book as unread with both sides agreeing."""
+    hold = hold if hold is not None else json.loads(HOLD.read_text(encoding="utf-8"))
+    books = {b["id"] for b in json.loads((Path(export) / "books.json").read_text(encoding="utf-8"))["books"]}
+    bad = [f"names {n}, which is not a book in the export"
+           for n in list(hold.get("released") or []) + list(hold.get("books") or {}) if n not in books]
+    return {"build/text-hold.json": bad} if bad else {}
 
 
 def text_expectation(export, d, hold=None):
@@ -173,7 +184,10 @@ def text_expectation(export, d, hold=None):
     list (build/text-hold.json) alone."""
     bid = d["book"]["id"]
     chs = [c for c in d["chapters"] if c.get("text_html")]
-    held = (hold if hold is not None else (json.loads(HOLD.read_text(encoding="utf-8")).get("books") or {})).get(bid)
+    hold = hold if hold is not None else json.loads(HOLD.read_text(encoding="utf-8"))
+    held = (hold.get("books") or {}).get(bid)
+    if not held and bid not in (hold.get("released") or []):
+        held = hold["unread"]
     if held:
         return {c["id"]: ("withheld", "hold:" + held) for c in chs}
     if any(not x.get("chapter") and x.get("printed_in_text") is not False for x in d.get("errata") or []):
@@ -666,6 +680,44 @@ def excerpt_links_check(dist, export):
     return bad
 
 
+def scan_links_check(dist, export):
+    """{page: [findings]}: every excerpt and problem with a page shows its page label once, in its first line; in a
+    book transcribed from a scan (books.json transcription.page_scans) the label is a link (a.pg) to exactly that
+    page's scan, and in any other book it is plain text (span.pg) with no link."""
+    bad = defaultdict(list)
+    index = json.loads((Path(export) / "books.json").read_text(encoding="utf-8"))
+    scans = {b["id"]: (b.get("transcription") or {}).get("page_scans") or {} for b in index["books"]}
+    rec = {}
+    for f in sorted((Path(export) / "books").glob("*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        for kind in ("excerpts", "problems"):
+            for x in d[kind]:
+                rec[x["id"]] = (d["book"]["id"], x.get("page"))
+    for page in sorted(Path(dist).glob("books/*/**/index.html")):
+        rel = page.relative_to(dist).as_posix()
+        raw = page.read_text(encoding="utf-8")
+        for m in re.finditer(r'<li class="(?:excerpt|problem)" data-kind="(excerpt|problem)" data-id="([^"]+)"[^>]*>'
+                             r'<p class="loc">(.*?)</p>', raw, re.S):
+            uid = html.unescape(m.group(2))
+            if uid not in rec:
+                continue  # a unit the export does not hold: the unit check reports it
+            bid, pg = rec[uid]
+            links = [html.unescape(h) for h in re.findall(r'<a class="pg" href="([^"]*)"', m.group(3))]
+            plain = len(re.findall(r'<span class="pg">', m.group(3)))
+            want = scans.get(bid, {}).get(str(pg)) if pg else None
+            if not pg:
+                if links or plain:
+                    bad[rel].append(f"{m.group(1)} {uid} shows a page label; its record has no page")
+            elif want:
+                if links != [want] or plain:
+                    bad[rel].append(f"{m.group(1)} {uid}, p. {pg}: its label links to {links or 'nothing'}, "
+                                    f"the scan of that page is {want}")
+            elif links or plain != 1:
+                bad[rel].append(f"{m.group(1)} {uid}, p. {pg}: {len(links)} scan links and {plain} plain labels, "
+                                f"expected one plain label (its book links no scan for that page)")
+    return bad
+
+
 def site_units(dist, export=None):
     """({(kind, id): [hit, ...]}, {(page, key): [stated text, ...]}, {page: [markup findings]}); a hit is a dict.
     With the export, the text pages' own checks too (text_pages_check)."""
@@ -675,6 +727,10 @@ def site_units(dist, export=None):
         for rel, found in text_pages_check(dist, export).items():
             pages[rel].extend(found)
         for rel, found in excerpt_links_check(dist, export).items():
+            pages[rel].extend(found)
+        for rel, found in scan_links_check(dist, export).items():
+            pages[rel].extend(found)
+        for rel, found in hold_names_check(export).items():
             pages[rel].extend(found)
     for css in sorted(dist.rglob("*.css")):
         if css.relative_to(dist).parts[0] == "vendor":
@@ -1414,6 +1470,42 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         ]
     else:
         print("controls on excerpt links: NOT RUN, no excerpt links to a block, or none has emphasis")
+    # a page label linked to its scan, and one in a book with no scans: point the first at another page's scan, make
+    # it plain, and give the second a link
+    linked, plain = [], []
+    for page in sorted(Path(dist).glob("books/*/**/index.html")):
+        raw = page.read_text(encoding="utf-8")
+        rel = page.relative_to(dist).as_posix()
+        hrefs = re.findall(r'<a class="pg" href="([^"]+)"', raw)
+        if hrefs and len(set(hrefs)) > 1:
+            linked.append((rel, hrefs))
+        elif not hrefs and '<span class="pg">' in raw:
+            plain.append(rel)
+    if linked and plain:
+        lp, hrefs = rng.choice(linked)
+        other = next(h for h in hrefs if h != hrefs[0])
+        pp = rng.choice(plain)
+        site_plants += [
+            ("point a page label at another page's scan",
+             lambda c: plant_text(c, lp, f'<a class="pg" href="{hrefs[0]}"', f'<a class="pg" href="{other}"'),
+             {("page", lp, "markup")}),
+            ("make a scan-linked page label plain",
+             lambda c: plant_text(c, lp, f'<a class="pg" href="{hrefs[0]}" title="This page in the scan of the printed '
+                                      f'book">', '<span class="pg" data-planted="">'), {("page", lp, "markup")}),
+            ("link a page label in a book with no scans",
+             lambda c: plant_text(c, pp, '<span class="pg">', '<a class="pg" href="https://archive.org/">'),
+             {("page", pp, "markup")}),
+        ]
+    else:
+        print("controls on scan links: NOT RUN, no page links two scans, or none has a plain page label")
+    # the hold file's names: a released book renamed by one character must be seen (the site refuses it too)
+    hold = json.loads(HOLD.read_text(encoding="utf-8"))
+    if hold.get("released"):
+        typo = dict(hold, released=[hold["released"][0] + "x"] + hold["released"][1:])
+        if not hold_names_check(export, typo) or hold_names_check(export):
+            print(f"control 'misname a released book in the hold file' (seed {seed}): FAILED")
+            sys.exit(2)
+        print(f"control 'misname a released book in the hold file' (seed {seed}): RED as planted, {typo['released'][0]}")
     for name, plant, want in site_plants:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "dist"

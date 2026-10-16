@@ -112,6 +112,7 @@ section.credit { border-top: 1px solid var(--rule); margin-top: 1.5rem; }
 mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; padding: 0 0.1em; }
 #search-more { font: inherit; }
 .excerpt .loc .pg { color: var(--muted); margin-left: 0.5em; }
+.excerpt .loc a.pg { color: var(--accent); }  /* a scan link reads as a link, like every other */
 .excerpt .loc .intext { margin-left: 0.6em; }
 article.text > :target { background: color-mix(in srgb, var(--accent) 12%, transparent); box-shadow: 0 0 0 0.4em color-mix(in srgb, var(--accent) 12%, transparent); }
 
