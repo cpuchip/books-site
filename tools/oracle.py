@@ -1500,7 +1500,7 @@ def run_controls(export, dist, units, counts, stated, build, seed):
         img_page = units[("text", rng.choice(with_img))]["page"] if with_img else None
         img = (re.search(r'<img[^>]*src="\.\./\.\./\.\./\.\./\.\./([^"]+)"', (Path(dist) / img_page).read_text(encoding="utf-8"))
                .group(1) if img_page else None)
-        plain = [i for i in texts if "<img" not in (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8")]
+        plain = [i for i in texts if not re.search(r"<img|scanmark", (Path(dist) / units[("text", i)]["page"]).read_text(encoding="utf-8"))]  # a page with scan links copied to another book would be red twice
         from_page = units[("text", rng.choice(plain))]["page"]
         tw = rng.choice(plain)
         tw_page = units[("text", tw)]["page"]
