@@ -106,7 +106,8 @@ TEXT_OUT_CLASSES = {"math", "inline", "display", "smallcaps", "center", "footnot
 SCAN_HREF = re.compile(r"https://archive\.org/download/[A-Za-z0-9_.-]+/page/n[0-9]+\.jpg\Z")
 TEXT_PAGE = re.compile(r"books/([^/]+)/ch/([^/]+)/text/index\.html\Z")
 WITHHELD = {"errata": "its book's errata do not yet say which chapter each is in",
-            "macros": "its book's macros name the transcription's source"}
+            "macros": "its book's macros name the transcription's source",
+            "conversion": "its text could not be converted for the page"}
 
 
 class _TextIn(HTMLParser):
@@ -183,6 +184,16 @@ def hold_names_check(export, hold=None):
 
 
 def text_expectation(export, d, hold=None):
+    """text_html_expectation, and ("withheld", "conversion") for each chapter whose text_latex holds text and whose
+    text_html is empty: its chapter page must say so, not stay silent."""
+    out = text_html_expectation(export, d, hold)
+    for c in d["chapters"]:
+        if not c.get("text_html") and (c.get("text_latex") or "").strip():
+            out[c["id"]] = ("withheld", "conversion")
+    return out
+
+
+def text_html_expectation(export, d, hold=None):
     """{chapter id: ("page", its text) or ("withheld", "errata" | "macros" | "markup" | "hold:<reason>")} for each
     chapter that has text_html: what the site must do with it, decided here from the export and the review's hold
     list (build/text-hold.json) alone."""

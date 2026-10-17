@@ -581,7 +581,21 @@ edited into it. <a href="../../../index.html#provenance">Where this came from</a
     return page(f"{title} (text): {b['title']}", body, 5, math=b.get("macros") or {})
 
 
+# a chapter whose source text the export holds (text_latex) but whose conversion to HTML failed (no text_html): a
+# reader is told, instead of meeting a chapter page that is silent about its text (Todhunter had two, 2026-10-17)
+CONVERSION_FAILED = "its text could not be converted for the page"
+
+
 def text_pages(d, image_ok):
+    """text_chapter_pages, and for each chapter with source text but no text_html the reason CONVERSION_FAILED."""
+    state, clean, images = text_chapter_pages(d, image_ok)
+    for c in d["chapters"]:
+        if not c.get("text_html") and (c.get("text_latex") or "").strip():
+            state[c["id"]] = CONVERSION_FAILED
+    return state, clean, images
+
+
+def text_chapter_pages(d, image_ok):
     """{chapter id: None (a page) or the reason it is withheld}, {chapter id: clean HTML}, [image paths]."""
     b = d["book"]["id"]
     chs = [c for c in d["chapters"] if c.get("text_html")]
