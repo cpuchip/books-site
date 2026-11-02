@@ -645,6 +645,10 @@ edition). It arrived at pd-books 43ada35 and showed three things the site had as
   it, so Granville's 18 chapters with `text_html` went out unread on the first build. Now a book's text is published
   only when the file lists it under `released` (the five books a read released: Todhunter on three chapters, the other four on all of theirs); any other book is withheld
   with the `unread` reason until a read releases it. Build and oracle read the same rule.
+- **Release is per chapter** (2026-10-17). `released` maps each released book to the chapters a read released.
+  A released book that gains a chapter's text (Todhunter's two, converted at pd-books 3364b3c) holds it as unread
+  until a read releases it, instead of publishing it because the book was released once. A chapter with source text
+  and no `text_html` says on its chapter page that its text could not be converted, instead of staying silent.
 - **A name on the hold file that is no book refuses the build** (a typo or a renamed id would otherwise withhold a
   released book as unread, and the oracle, reading the same file, would agree); the oracle reports it too.
 - **Provenance without a licence to quote.** A Gutenberg book's page quotes its transcription's licence. A scan

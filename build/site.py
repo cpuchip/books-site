@@ -603,7 +603,8 @@ def text_chapter_pages(d, image_ok):
     # a book the review held back (build/text-hold.json): its reason, as readers will read it
     hold = json.loads((HERE / "text-hold.json").read_text(encoding="utf-8"))
     held = (hold.get("books") or {}).get(b)
-    if not held and b not in (hold.get("released") or []):
+    released = (hold.get("released") or {}).get(b)
+    if not held and released is None:
         held = hold["unread"]  # a book no read has released yet: withheld, never published by default
     if held:
         return {c["id"]: held for c in chs}, {}, []
@@ -614,6 +615,9 @@ def text_chapter_pages(d, image_ok):
     # that name on a text page, which Michael's ruling keeps off them
     if re.search(r"gutenberg", json.dumps(d["book"].get("macros") or {}), re.I):
         return {c["id"]: "its book's macros name the transcription's source" for c in chs}, {}, []
+    # a released book's chapter that no read has released (its text new in the export): withheld as unread
+    unread = [c["id"] for c in chs if c["id"] not in released]
+    chs = [c for c in chs if c["id"] in released]
     where = {}
     for c in chs:
         for i in textpage.ids_of(c["text_html"]):
@@ -641,6 +645,7 @@ def text_chapter_pages(d, image_ok):
         return out, clean, images
     first, _, _ = run({c["id"] for c in chs})  # which chapters pass; a link resolves only to a page that exists
     state, clean, images = run({i for i, w in first.items() if w is None})
+    state.update({i: hold["unread"] for i in unread})
     return state, clean, images
 
 
@@ -823,9 +828,14 @@ def build(export, out, pin, pd_books_check=True, sa_root=None, sa_pin=None):
     entries = {b["id"]: b for b in index["books"]}
     # a name on the hold file that is no book (a typo, a renamed id) would silently withhold a released book as unread
     hold = json.loads((HERE / "text-hold.json").read_text(encoding="utf-8"))
-    for name in list(hold.get("released") or []) + list(hold.get("books") or {}):
+    for name in list(hold.get("released") or {}) + list(hold.get("books") or {}):
         if name not in entries:
             refuse(f"build/text-hold.json names {name}, which is not a book in the export")
+    for name, chapters in (hold.get("released") or {}).items():
+        have = {c["id"] for d in books if d["book"]["id"] == name for c in d["chapters"]}
+        for cid in chapters:
+            if cid not in have:
+                refuse(f"build/text-hold.json releases {cid}, which is not a chapter of {name} in the export")
     with tempfile.TemporaryDirectory(dir=Path(out).parent if Path(out).parent.exists() else None) as tmp:
         dist = Path(tmp) / "dist"
         dist.mkdir()

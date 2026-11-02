@@ -48,6 +48,7 @@ exactly the planted findings and nothing else:
 A match is reported only after every control came back red as planted.
 """
 import argparse
+import importlib.util
 import html
 import json
 import posixpath
@@ -165,6 +166,10 @@ class _TextIn(HTMLParser):
         self.bad.append("processing instruction")
 
 
+_spec = importlib.util.spec_from_file_location("neutral", Path(__file__).resolve().parent.parent / "build" / "neutral.py")
+NEUTRAL = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(NEUTRAL)
+
 HOLD = Path(__file__).resolve().parent.parent / "build" / "text-hold.json"
 
 
@@ -179,7 +184,11 @@ def hold_names_check(export, hold=None):
     hold = hold if hold is not None else json.loads(HOLD.read_text(encoding="utf-8"))
     books = {b["id"] for b in json.loads((Path(export) / "books.json").read_text(encoding="utf-8"))["books"]}
     bad = [f"names {n}, which is not a book in the export"
-           for n in list(hold.get("released") or []) + list(hold.get("books") or {}) if n not in books]
+           for n in list(hold.get("released") or {}) + list(hold.get("books") or {}) if n not in books]
+    for n, chapters in (hold.get("released") or {}).items():
+        f = Path(export) / "books" / f"{n}.json"
+        have = {c["id"] for c in json.loads(f.read_text(encoding="utf-8"))["chapters"]} if f.is_file() else set()
+        bad += [f"releases {cid}, which is not a chapter of {n} in the export" for cid in chapters if cid not in have]
     return {"build/text-hold.json": bad} if bad else {}
 
 
@@ -201,7 +210,8 @@ def text_html_expectation(export, d, hold=None):
     chs = [c for c in d["chapters"] if c.get("text_html")]
     hold = hold if hold is not None else json.loads(HOLD.read_text(encoding="utf-8"))
     held = (hold.get("books") or {}).get(bid)
-    if not held and bid not in (hold.get("released") or []):
+    released = (hold.get("released") or {}).get(bid)
+    if not held and released is None:
         held = hold["unread"]
     if held:
         return {c["id"]: ("withheld", "hold:" + held) for c in chs}
@@ -209,6 +219,9 @@ def text_html_expectation(export, d, hold=None):
         return {c["id"]: ("withheld", "errata") for c in chs}
     if re.search(r"gutenberg", json.dumps(d["book"].get("macros") or {}), re.I):
         return {c["id"]: ("withheld", "macros") for c in chs}
+    # a chapter of a released book that no read has released: withheld as unread
+    unread = [c["id"] for c in chs if c["id"] not in released]
+    chs = [c for c in chs if c["id"] in released]
     targets = set()
     parsed = {}
     for c in chs:
@@ -230,6 +243,7 @@ def text_html_expectation(export, d, hold=None):
         if dup:
             bad.append(f"id {dup[0]!r} twice")
         out[c["id"]] = ("withheld", "markup") if bad else ("page", "".join(p.data))
+    out.update({i: ("withheld", "hold:" + hold["unread"]) for i in unread})
     return out
 
 
@@ -276,7 +290,10 @@ def export_units(export):
             fields=None, withheld=None):
         counts[(kind, i)] += 1
         units[(kind, i)] = {"page": page, "text": [norm(t) for t in text if isinstance(t, str) and t.strip()],
-                            "evidence": [norm(t) for t in re.split(r"(?<=[.;])\s+", evidence or "") if len(t.strip()) > 20],
+                            # as readers get it: build/neutral.py's table rewrites seat credits (data the oracle shares;
+                            # tools/outward.py proves no name is left), then every sentence must be on the page
+                            "evidence": [norm(t) for t in re.split(r"(?<=[.;])\s+", NEUTRAL.evidence(evidence or ""))
+                                         if len(t.strip()) > 20],
                             "anchors": anchors, "lead": norm(lead) if lead is not None else None,
                             "anchor_id": anchor_id, "group": group, "counts": unit_counts or {},
                             "fields": None if fields is None else
@@ -981,8 +998,8 @@ def compare(units, counts, site, stated=None, site_stated=None, pages=None):
             lost.append(f"(the first child says {hit['first'][:40]!r}, the export {want['lead'][:40]!r})")
         if want["lead"] is not None and hit["before"]:
             lost.append("(text comes before the name)")
-        if want["evidence"] and not any(t in text for t in want["evidence"]):
-            lost.append("(the evidence: none of its sentences is on the site)")
+        if want["evidence"] and not all(t in text for t in want["evidence"]):
+            lost.append("(the evidence: a sentence of it, as rewritten for readers, is not on the site)")
         if lost:
             out.append((kind, i, "content", f"{len(lost)} of {len(want['text'])} texts missing, e.g. {lost[0][:60]!r}"))
         if want["anchors"] is not None and hit["anchors"] != want["anchors"]:
@@ -1653,11 +1670,12 @@ def run_controls(export, dist, units, counts, stated, build, seed):
     # the hold file's names: a released book renamed by one character must be seen (the site refuses it too)
     hold = json.loads(HOLD.read_text(encoding="utf-8"))
     if hold.get("released"):
-        typo = dict(hold, released=[hold["released"][0] + "x"] + hold["released"][1:])
+        first = next(iter(hold["released"]))
+        typo = dict(hold, released={(k + "x" if k == first else k): v for k, v in hold["released"].items()})
         if not hold_names_check(export, typo) or hold_names_check(export):
             print(f"control 'misname a released book in the hold file' (seed {seed}): FAILED")
             sys.exit(2)
-        print(f"control 'misname a released book in the hold file' (seed {seed}): RED as planted, {typo['released'][0]}")
+        print(f"control 'misname a released book in the hold file' (seed {seed}): RED as planted, {first}x")
     for name, plant, want in site_plants:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "dist"
