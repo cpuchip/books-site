@@ -83,6 +83,28 @@
       }
     }
   });
+  // a formula's box scrolls sideways so a wide formula fits a phone; KaTeX's subscripts, roots and bars often hang a
+  // pixel or two past the box, which drew a scrollbar under a formula as short as c_v. site.css gives each box 3px of
+  // inline padding (taken back by its margin) for that overhang; a box still 3px or less too narrow (a formula a hair
+  // wider than its table cell) lets it show (.fit) instead of scrolling. Widths settle once KaTeX's fonts are in, so
+  // this runs then and on every resize; tinyScroll then counts boxes that still scroll for 3px or less (no count yet
+  // means not ready): the browser check requires 0
+  var fit = function () {
+    var boxes = document.querySelectorAll("main .math, main .tx .katex, main .tx .katex-display");
+    Array.prototype.forEach.call(boxes, function (el) { el.classList.remove("fit"); });
+    Array.prototype.forEach.call(boxes, function (el) {
+      var d = el.scrollWidth - el.clientWidth;
+      if (d > 0 && d <= 3) el.classList.add("fit");
+    });
+    var tinyScroll = 0;
+    Array.prototype.forEach.call(boxes, function (el) {
+      var d = el.scrollWidth - el.clientWidth;
+      if (d > 0 && d <= 3 && getComputedStyle(el).overflowX !== "visible") tinyScroll += 1;
+    });
+    report.setAttribute("data-tiny-scroll", String(tinyScroll));
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit); else fit();
+  window.addEventListener("resize", fit);
   // how far the page is wider than its window (0 when nothing overflows): the browser check requires 0
   var root = document.documentElement;
   report.setAttribute("data-overflow", String(Math.max(0, root.scrollWidth - root.clientWidth)));

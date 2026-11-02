@@ -67,6 +67,11 @@ select { font: inherit; max-width: 100%; }
    inside their own box so the page never grows wider than the window */
 article.text { overflow-wrap: anywhere; }
 article.text .math { display: inline-block; max-width: 100%; overflow-x: auto; overflow-y: hidden; vertical-align: middle; }
+/* room for KaTeX's overhang (a subscript, a root, a bar a pixel or two past the box), so a short formula draws no
+   scrollbar; the margin gives the 3px back, so nothing moves */
+.math, article.text .math, .tx .katex, .tx .katex-display { padding-inline: 3px; margin-inline: -3px; }
+/* a box still a few pixels too narrow for its formula (site.js marks it .fit) shows the overhang, not a scrollbar */
+.math.fit, article.text .math.fit, .tx .katex.fit, .tx .katex-display.fit { overflow: visible; }
 article.text .math-display { display: block; }
 article.text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 article.text td, article.text th { padding: .1rem .4rem; }
