@@ -7,6 +7,6 @@ WORKDIR /src
 COPY . .
 RUN sh build.sh /site
 
-FROM nginx:1.28.0-alpine
+FROM nginx:1.30.7-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /site /usr/share/nginx/html
