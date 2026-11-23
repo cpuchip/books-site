@@ -7,8 +7,11 @@ index.html), a #fragment must be an id on that page, an empty href or a bare "#"
 must be reachable from index.html. External: every http(s) URL is requested once
 (HEAD, then GET when a server refuses HEAD) and must answer 2xx or 3xx. --offline skips the external half
 and says so; the build that deploys never passes it.
+One exception, named in MAINTENANCE: a host listed there that answers 503 with a Retry-After header (a server's
+own way of saying "down for maintenance, come back later") is printed as WAIVED instead of BROKEN, until the date
+listed. Any other answer from that host is still red, and after the date the waiver is gone.
 --control plants a missing file, a missing fragment, an empty link and an orphan page in a copy of DIST and
-requires all four red.
+requires all four red, then requires the waiver to pass only the one answer it names.
 """
 import argparse
 import re
@@ -18,6 +21,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urldefrag, urlsplit
@@ -102,32 +106,76 @@ def internal(dist, pages):
     return bad, external
 
 
+# Project Gutenberg has answered 503 with Retry-After 21600 to every page since 2026-11-20 (PGLAF: rebuilding after
+# vandalism, no return date). The waiver ends on its own; renew it only by a new commit.
+MAINTENANCE = {"www.gutenberg.org": date(2026, 12, 7), "gutenberg.org": date(2026, 12, 7)}
+
+
+def judge(url, status, retry_after, final_url, today):
+    """ok, waived or bad. Waived needs all of: 503, a Retry-After header, the link's host and the host that
+    answered both in MAINTENANCE, and today on or before the host's date."""
+    if isinstance(status, int) and 200 <= status < 400:
+        return "ok"
+    host, final_host = urlsplit(url).hostname, urlsplit(final_url or url).hostname
+    if (status == 503 and retry_after and host in MAINTENANCE and final_host in MAINTENANCE
+            and today <= MAINTENANCE[host]):
+        return "waived"
+    return "bad"
+
+
+def judge_control():
+    """The waiver passes the one answer it names and nothing next to it."""
+    g, d = "https://www.gutenberg.org/ebooks/1", date(2026, 11, 23)
+    cases = [
+        ((g, 503, "21600", g, d), "waived"),
+        ((g, 503, None, g, d), "bad"),                                    # 503 with no Retry-After
+        ((g, 404, "21600", g, d), "bad"),                                 # a page that is gone
+        ((g, 500, "21600", g, d), "bad"),                                 # an error that is not maintenance
+        ((g, "URLError: timed out", None, g, d), "bad"),                  # unreachable
+        (("https://example.org/", 503, "21600", "https://example.org/", d), "bad"),  # a host not listed
+        ((g, 503, "21600", "https://elsewhere.example/", d), "bad"),     # redirected off the listed host
+        ((g, 503, "21600", g, date(2026, 12, 8)), "bad"),                 # after the waiver's date
+        ((g, 200, None, g, d), "ok"),
+    ]
+    got = [judge(*args) for args, _ in cases]
+    want = [w for _, w in cases]
+    if got != want:
+        print(f"WAIVER CONTROL FAILED: wanted {want}, checker said {got}")
+        sys.exit(2)
+    print(f"waiver control: {len(cases)} answers judged as planted (only 503 + Retry-After from a listed host, "
+          "before its date, is waived)")
+
+
 def fetch(url):
     headers = {"User-Agent": "books-site linkcheck (static site build)"}
     for method in ("HEAD", "GET"):
         try:
             req = urllib.request.Request(url, method=method, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as r:
-                return url, r.status
+                return url, r.status, None, r.geturl()
         except urllib.error.HTTPError as e:
             if method == "HEAD" and e.code in (403, 405, 501):
                 continue
-            return url, e.code
+            return url, e.code, e.headers.get("Retry-After") if e.headers else None, e.geturl()
         except Exception as e:  # noqa: BLE001 - any failure to reach a source is a broken link
-            return url, f"{type(e).__name__}: {e}"
-    return url, "no answer"
+            return url, f"{type(e).__name__}: {e}", None, url
+    return url, "no answer", None, url
 
 
 def run(dist, offline):
     pages = scan(dist)
     bad, external = internal(dist, pages)
-    ext_bad = []
+    ext_bad, waived = [], []
     if not offline:
+        today = datetime.now(timezone.utc).date()
         with ThreadPoolExecutor(8) as ex:
-            for url, status in ex.map(fetch, sorted(external)):
-                if not (isinstance(status, int) and 200 <= status < 400):
+            for url, status, retry_after, final_url in ex.map(fetch, sorted(external)):
+                verdict = judge(url, status, retry_after, final_url, today)
+                if verdict == "waived":
+                    waived.append((url, status, retry_after))
+                elif verdict == "bad":
                     ext_bad.append((url, status))
-    return pages, bad, external, ext_bad
+    return pages, bad, external, ext_bad, waived
 
 
 def main():
@@ -148,7 +196,7 @@ def main():
                                            + "\n.x { background: url(no-such-font.woff2); }\n", encoding="utf-8")
             (copy / "orphan").mkdir()
             (copy / "orphan" / "index.html").write_text("<p>nobody links here</p>", encoding="utf-8")
-            _, bad, _, _ = run(copy, offline=True)
+            _, bad, _, _, _ = run(copy, offline=True)
             got = sorted(link for _, link, _ in bad)
             if got != ["", "(no link reaches this page)", "about/index.html#no-such-id", "books/no-such-book/index.html",
                        "no-such-font.woff2"]:
@@ -156,7 +204,8 @@ def main():
                 sys.exit(2)
             print("link control: RED as planted (a missing file, a missing fragment, an empty link, an orphan page, "
                   "a missing stylesheet url)")
-    pages, bad, external, ext_bad = run(a.dist, a.offline)
+        judge_control()
+    pages, bad, external, ext_bad, waived = run(a.dist, a.offline)
     n = sum(len(h.links) for h in pages.values())
     print(f"links: {n} on {len(pages)} pages; {len(external)} distinct external"
           + (" (NOT requested: --offline)" if a.offline else ""))
@@ -164,10 +213,15 @@ def main():
         print(f"  BROKEN {Path(page).relative_to(Path(a.dist).resolve())}: {link} ({why})")
     for url, status in ext_bad[:20]:
         print(f"  BROKEN external {url}: {status}")
+    for url, status, retry_after in waived:
+        host = urlsplit(url).hostname
+        print(f"  WAIVED external {url}: {status}, Retry-After {retry_after} (maintenance; waiver for {host} ends "
+              f"{MAINTENANCE[host].isoformat()})")
     if bad or ext_bad:
         print(f"LINKS RED: {len(bad)} internal, {len(ext_bad)} external")
         sys.exit(1)
-    print("LINKS GREEN" + (" (internal only)" if a.offline else ""))
+    print("LINKS GREEN" + (" (internal only)" if a.offline else "")
+          + (f" ({len(waived)} external WAIVED: source in maintenance)" if waived else ""))
 
 
 if __name__ == "__main__":
